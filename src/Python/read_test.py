@@ -8,12 +8,6 @@ from struct import *
 # ser = serial.Serial('/dev/ttyUSB0', 921600)  
 ser = serial.Serial('COM4', 921600,  timeout=1)  
 
-ser.write(b'r')
-time.sleep(0.05)
-
-ser.write(b's')
-time.sleep(0.05)
-
 state = 0
 buf = []
 
@@ -33,6 +27,14 @@ ch.append( ACC_GYRO() )
 ch.append( ACC_GYRO() )
 ch.append( ACC_GYRO() )
 ch.append( ACC_GYRO() )
+
+# command char 'r' means to stop streaming
+ser.write(b'r')
+time.sleep(0.01)
+
+# command char 's' means to start streaming
+ser.write(b's')
+time.sleep(0.01)
 
 while 1:
 
