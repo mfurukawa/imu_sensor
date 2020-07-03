@@ -31,3 +31,6 @@
 *.out
 *.app
 *.csv
+src/Unity/Okochi_20200703/Library/*.*
+src/Unity/Okochi_20200703/Logs/Packages-Update.log
+*.log
