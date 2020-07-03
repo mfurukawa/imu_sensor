@@ -1,7 +1,7 @@
 # imu_sensor
 Eagle PCB, mbed source code included.
 
-- Juky  3, 2020 - added, Python, Unity, C# sample
+- Juky  3, 2020 - Python, Unity, C# sample added
 - June 26, 2020 - created 
 
 Masahiro Furukawa
