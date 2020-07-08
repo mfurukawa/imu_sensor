@@ -3468,3 +3468,14 @@ src/Unity/Okochi_20200703/Library/ShaderCache/1/16b141565de26b0e0cbb50ced6e6552a
 src/Unity/Okochi_20200703/Library/ShaderCache/0/082ad42da370253bc6c3a0b660fc3b7f.bin
 src/Unity/Okochi_20200703/Library/ShaderCache/0/0583fe67b70726e287f1d57f78a5a868.bin
 *.pdb
+*.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Assembly-CSharp.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.CollabProxy.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.Rider.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.TextMeshPro.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.TextMeshPro.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.VSCode.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEditor.TestRunner.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEngine.TestRunner.pdb
+src/Unity/Okochi_20200703/Temp/UnityLockfile
+*.cache

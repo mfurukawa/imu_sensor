@@ -13,6 +13,9 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
+// ToDo July 08, 2020
+// https://www.it-swarm.dev/ja/c%23/%E3%82%B7%E3%83%AA%E3%82%A2%E3%83%AB%E3%83%9D%E3%83%BC%E3%83%88%E3%81%8B%E3%82%89%E8%AA%AD%E3%81%BF%E6%9B%B8%E3%81%8D%E3%81%99%E3%82%8B%E6%96%B9%E6%B3%95/967400750/
+
 public class Serial : MonoBehaviour
 {
     // Coefficient values to translate byte code to real value
