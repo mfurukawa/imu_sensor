@@ -3479,3 +3479,14 @@ src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEditor.TestRunner.pdb
 src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEngine.TestRunner.pdb
 src/Unity/Okochi_20200703/Temp/UnityLockfile
 *.cache
+*.pdb
+*.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Assembly-CSharp.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.CollabProxy.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.Rider.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.TextMeshPro.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.TextMeshPro.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/Unity.VSCode.Editor.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEditor.TestRunner.pdb
+src/Unity/Okochi_20200703/Library/ScriptAssemblies/UnityEngine.TestRunner.pdb
+src/Unity/Okochi_20200703/obj/Debug/Assembly-CSharp.csprojAssemblyReference.cache
