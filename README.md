@@ -1,8 +1,9 @@
 # imu_sensor
 Eagle PCB, mbed source code included.
 
-- Juky  3, 2020 - Python, Unity, C# sample added
+- July  3, 2020 - Python, Unity, C# sample added
 - June 26, 2020 - created 
+- September 9, 2020 - changed Python code and mbed Protocol 
 
 Masahiro Furukawa
 
@@ -14,11 +15,11 @@ Masahiro Furukawa
 
 mbed Source Code
 
-[https://os.mbed.com/users/mfurukawa/code/MPU-9250-Ch4_ACC_binary/](https://os.mbed.com/users/mfurukawa/code/MPU-9250-Ch4_ACC_binary/)
+https://os.mbed.com/users/nakataniuchi/code/MPU9250_CH4_3_0_0/
 
 see main.cpp
 
-[https://os.mbed.com/users/mfurukawa/code/MPU-9250-Ch4_ACC_binary//file/818d64d37aeb/main.cpp/](https://os.mbed.com/users/mfurukawa/code/MPU-9250-Ch4_ACC_binary//file/818d64d37aeb/main.cpp/)
+https://os.mbed.com/users/nakataniuchi/code/MPU9250_CH4_3_0_0//file/cdeed96f97fc/main.cpp/
 
 
 # How to check mbed response
@@ -34,9 +35,13 @@ see main.cpp
 7. Press ‘r’ key and it will stop.
 
 
-# Protocol for ver2.0.2
+# Protocol for ver 3.0.0
 
 Byte order is **Big** Endian
+
+for Header : 1 bytes = 8 bits describes 1 value 
+
+<td>*</td> : header 
 
 for Acceleration  : 2 bytes = 16 bits describes 1 value
 
@@ -79,7 +84,9 @@ w<sub>y, i</sub> : angular velocity on axis Y of ch i
 
 w<sub>z, i</sub> : angular velocity on axis Z of ch i
 
-Byte Array (50 Bytes = 2 Byte * 3(xyz) *2(Acc, Gyro) * 4 (Ch) + 2(CR, LF) ) :
+Time : Time value gives the difference from the previous sequence
+
+Byte Array (52 Bytes = 1 Byte(Header) + 2 Byte * 3(xyz) *2(Acc, Gyro) * 4 (Ch) + 1 Byte(Time value) + 2 Byte(CR, LF) ) :
 
 
 <table>
@@ -117,6 +124,39 @@ Byte Array (50 Bytes = 2 Byte * 3(xyz) *2(Acc, Gyro) * 4 (Ch) + 2(CR, LF) ) :
    <td>15
    </td>
   </tr>
+  <tr>
+   <td>*
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
+   <td>
+   </td>
   <tr>
    <td>A<sub>x,1</sub> 
    </td>
@@ -220,11 +260,11 @@ Byte Array (50 Bytes = 2 Byte * 3(xyz) *2(Acc, Gyro) * 4 (Ch) + 2(CR, LF) ) :
    </td>
   </tr>
   <tr>
+   <td>Time
+   </td>
    <td>CR
    </td>
    <td>LF
-   </td>
-   <td>
    </td>
    <td>
    </td>
@@ -324,10 +364,17 @@ Thus six unsigned integer (8bit) variales represent three accelerations. Also si
 > void eventFunc(void)
 > {
 >   ...
+>     // set header 
+>     putc(42,stdout); // * 
+>
 >     for(int i=0; i<nCh; i++) {
 >         for(int j=0; j<6; j++) putc(imu[i]->accelerometer_response[j], stdout);
 >         for(int j=0; j<6; j++) putc(imu[i]->gyroscope_response[j],     stdout);
 >     }
+>     tmp_time = sp_time.read_ms();
+>     res_time = tmp_time - past_time;
+>     past_time = tmp_time;
+>     putc(res_time,stdout); //Time Value 
 >     putc(13, stdout);  //0x0d = 13(10) CR（復帰）
 >     putc(10, stdout);  //0x0a = 10(10) LF（改行）
 > }
