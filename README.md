@@ -1,11 +1,11 @@
 # imu_sensor
 Eagle PCB, mbed source code included.
 
-- July  3, 2020 - Python, Unity, C# sample added
-- June 26, 2020 - created 
-- September 9, 2020 - changed Python code and mbed Protocol 
+- September 9, 2020 - changed Python code and mbed Protocol / Yuto Nakayachi 
+- July  3, 2020 - Python, Unity, C# sample added / Masahiro Furukawa
+- June 26, 2020 - created / Masahiro Furukawa
 
-Masahiro Furukawa
+Masahiro Furukawa / Yuto Nakayachi
 
 
 # mbed Protocol 
