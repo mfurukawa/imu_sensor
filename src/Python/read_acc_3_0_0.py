@@ -81,9 +81,9 @@ def writeCSV():
     hour = dt_now.hour 
     minute = dt_now.minute 
     t = str(year)+str(month)+str(day)+str(hour)+str(minute)
-    title_int = "test"+str(t)+"_int"+".csv"
+    title_int = "acc_data"+str(t)+"_int"+".csv"
     FILE_int = open(title_int,"w",newline="") 
-    title_float="test"+str(t)+"_float"+".csv" 
+    title_float="acc_data"+str(t)+"_float"+".csv" 
     FILE_float = open(title_float,"w",newline="")    
     wi = csv.writer(FILE_int)
     wi.writerow(head)
@@ -95,8 +95,8 @@ def writeCSV():
     FILE_int.close() 
     FILE_float.close() 
     print()
-    print(title_int+" "+"done") 
-    print(title_float+" "+"done")
+    print(title_int+" "+"created") 
+    print(title_float+" "+"created")
     print()
     print("Done Create CSV File") 
        
