@@ -1,5 +1,6 @@
 #Acceleration and angular acceleration visualization program
-# July 7, 2020 
+# Oct 1, 2020 - update
+# July 7, 2020 - create
 # Yuto Nakayachi 
 
 import sys 
