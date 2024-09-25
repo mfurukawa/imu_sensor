@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog
 import serial
 import csv
+import struct  # バイト列の解析に使用
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -13,13 +14,18 @@ START_COM_PORT = 2
 END_COM_PORT = 8
 BAUD_RATE = 921600  # ボーレートを921600に設定
 
+# データのスケーリング用
+ACC_SCALE = 16384.0  # 例: 加速度のスケーリングファクター
+GYRO_SCALE = 131.0   # 例: ジャイロのスケーリングファクター
+
 class AccelerometerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Accelerometer Data Logger")
         
         # シリアルポートから読み込んだデータを保存するリスト
-        self.data = {'x': [], 'y': [], 'z': [], 'time': []}
+        self.data = {'x_acc': [], 'y_acc': [], 'z_acc': [],
+                     'x_gyro': [], 'y_gyro': [], 'z_gyro': [], 'time': []}
         self.is_running = True  # スレッド終了用フラグ
 
         # CSVファイル保存用の変数
@@ -34,9 +40,9 @@ class AccelerometerGUI:
 
         # グラフの初期設定
         self.fig, self.ax = plt.subplots()
-        self.line_x, = self.ax.plot([], [], label="X-axis")
-        self.line_y, = self.ax.plot([], [], label="Y-axis")
-        self.line_z, = self.ax.plot([], [], label="Z-axis")
+        self.line_x_acc, = self.ax.plot([], [], label="X-acc")
+        self.line_y_acc, = self.ax.plot([], [], label="Y-acc")
+        self.line_z_acc, = self.ax.plot([], [], label="Z-acc")
         self.ax.set_xlim(0, 100)
         self.ax.set_ylim(-10, 10)
         self.ax.legend()
@@ -48,6 +54,12 @@ class AccelerometerGUI:
         # CSV保存ボタン
         self.save_button = tk.Button(self.root, text="Save to CSV", command=self.save_to_csv)
         self.save_button.pack(side=tk.LEFT)
+
+        # データ計測開始・停止ボタン
+        self.start_button = tk.Button(self.root, text="Start Measurement", command=self.start_measurement)
+        self.start_button.pack(side=tk.LEFT)
+        self.stop_button = tk.Button(self.root, text="Stop Measurement", command=self.stop_measurement)
+        self.stop_button.pack(side=tk.LEFT)
 
         # ウィンドウ終了イベントを設定
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -71,11 +83,25 @@ class AccelerometerGUI:
         if file_path:
             with open(file_path, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Time', 'X', 'Y', 'Z'])  # ヘッダーを書き込み
+                writer.writerow(['Time', 'X-Acc', 'Y-Acc', 'Z-Acc', 'X-Gyro', 'Y-Gyro', 'Z-Gyro'])  # ヘッダーを書き込み
                 for i in range(len(self.data['time'])):
-                    writer.writerow([self.data['time'][i], self.data['x'][i], self.data['y'][i], self.data['z'][i]])
+                    writer.writerow([self.data['time'][i], self.data['x_acc'][i], self.data['y_acc'][i], self.data['z_acc'][i],
+                                     self.data['x_gyro'][i], self.data['y_gyro'][i], self.data['z_gyro'][i]])
+
+    def start_measurement(self):
+        """データ計測開始のために 's' を送信"""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.write(b's')
+            print("Measurement started.")
+
+    def stop_measurement(self):
+        """データ計測停止のために 'r' を送信"""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.write(b'r')
+            print("Measurement stopped.")
 
     def update_channel_status(self, channel, message):
+        """チャネルのエラーステータスを更新"""
         if "*** ERROR ***" in message:
             self.channel_status[channel].config(text=f"CH {channel}: Error", bg="red")
         else:
@@ -105,6 +131,7 @@ class AccelerometerGUI:
                 welcome_message = "\n".join(lines)
                 if "KOMATSU Experiment" in welcome_message:
                     print(f"Valid COM port found: {com_port}")
+                    ser.write(b's')  # 's' を送信してデータ送信を開始
                     return ser  # 有効なポートを開いた状態で返す
                 else:
                     ser.close()  # 無効な場合はポートを閉じる
@@ -113,58 +140,69 @@ class AccelerometerGUI:
         return None
 
     def read_serial_data(self):
-        channel = None  # 初期化しておく
         try:
-            while self.is_running:  # フラグがTrueの間実行
-                if self.serial_port.in_waiting > 0:  # データが存在する場合にのみ読み込む
-                    line = self.serial_port.readline().decode('utf-8').strip()
+            while self.is_running:
+                header = self.serial_port.read(1)
+                
+                # ヘッダーチェック ('*' で始まるか)
+                if header == b'*':
+                    # 12バイトの加速度データ (6バイト×2チャネル)
+                    acc_data = self.serial_port.read(6)
+                    x_acc, y_acc, z_acc = struct.unpack('<hhh', acc_data)  # 小さいエンディアンで2バイト整数をデコード
+                    x_acc = x_acc / ACC_SCALE  # スケーリング
+                    y_acc = y_acc / ACC_SCALE
+                    z_acc = z_acc / ACC_SCALE
                     
-                    if line.startswith("CH"):
-                        # チャネルを取得
-                        try:
-                            channel = int(line.split()[1])
-                        except (IndexError, ValueError):
-                            channel = None  # 何か問題があれば初期化
+                    # 12バイトのジャイロデータ (6バイト×2チャネル)
+                    gyro_data = self.serial_port.read(6)
+                    x_gyro, y_gyro, z_gyro = struct.unpack('<hhh', gyro_data)
+                    x_gyro = x_gyro / GYRO_SCALE  # スケーリング
+                    y_gyro = y_gyro / GYRO_SCALE
+                    z_gyro = z_gyro / GYRO_SCALE
 
-                    if channel and "WHOAMI" in line:
-                        # チャネルごとのステータスを確認
-                        sensor_status = []
-                        for _ in range(3):  # エラーメッセージが3行続くと想定
-                            status_line = self.serial_port.readline().decode('utf-8').strip()
-                            sensor_status.append(status_line)
+                    # タイムスタンプを読み取る
+                    time_data = self.serial_port.read(1)
+                    timestamp = struct.unpack('<B', time_data)[0]  # 1バイトのタイムスタンプ
 
-                        # チャネルのステータスを更新
-                        status_message = "\n".join(sensor_status)
-                        self.update_channel_status(channel, status_message)
+                    # CR (0x0d) と LF (0x0a) を読み飛ばす
+                    self.serial_port.read(2)
 
-                    if "Gyro_scale" in line and channel in [2, 4]:  # CH 2 と CH 4 のみ計測対象
-                        # 有効なチャネルから加速度データを取得し、解析
-                        try:
-                            x, y, z = map(float, line.split()[1:4])
-                            current_time = time.time() - time.time()
-                            self.data['x'].append(x)
-                            self.data['y'].append(y)
-                            self.data['z'].append(z)
-                            self.data['time'].append(current_time)
+                    # データを保存
+                    self.data['x_acc'].append(x_acc)
+                    self.data['y_acc'].append(y_acc)
+                    self.data['z_acc'].append(z_acc)
+                    self.data['x_gyro'].append(x_gyro)
+                    self.data['y_gyro'].append(y_gyro)
+                    self.data['z_gyro'].append(z_gyro)
+                    self.data['time'].append(timestamp)
 
-                            # データを一定数以上保持しないようにリミットを設定
-                            if len(self.data['x']) > 100:
-                                self.data['x'].pop(0)
-                                self.data['y'].pop(0)
-                                self.data['z'].pop(0)
-                                self.data['time'].pop(0)
-                        except ValueError:
-                            continue
+                    # データを一定数以上保持しないようにリミットを設定
+                    if len(self.data['x_acc']) > 100:
+                        self.data['x_acc'].pop(0)
+                        self.data['y_acc'].pop(0)
+                        self.data['z_acc'].pop(0)
+                        self.data['x_gyro'].pop(0)
+                        self.data['y_gyro'].pop(0)
+                        self.data['z_gyro'].pop(0)
+                        self.data['time'].pop(0)
 
         except serial.SerialException as e:
             print(f"Error reading from serial port: {e}")
 
     def update_plot(self, frame):
-        # グラフにリアルタイムデータをプロット
-        self.line_x.set_data(range(len(self.data['x'])), self.data['x'])
-        self.line_y.set_data(range(len(self.data['y'])), self.data['y'])
-        self.line_z.set_data(range(len(self.data['z'])), self.data['z'])
-        self.ax.set_xlim(0, max(100, len(self.data['x'])))
+        # データ長をそろえるために、最小長のリストに基づいてデータを切り詰める
+        min_len = min(len(self.data['x_acc']), len(self.data['y_acc']), len(self.data['z_acc']))
+        x_range = range(min_len)
+
+        # プロットデータを設定
+        self.line_x_acc.set_data(x_range, self.data['x_acc'][:min_len])
+        self.line_y_acc.set_data(x_range, self.data['y_acc'][:min_len])
+        self.line_z_acc.set_data(x_range, self.data['z_acc'][:min_len])
+
+        # プロットのX軸範囲を更新
+        self.ax.set_xlim(0, max(100, min_len))
+
+        # キャンバスの更新
         self.canvas.draw()
 
     def on_closing(self):
