@@ -70,13 +70,12 @@ class AccelerometerGUI:
             print("No valid COM port found.")
             return
         
-        print("threading.Thread(target=self.read_serial_data)")
         # シリアルポートからデータを読み込むスレッドを開始
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.start()
 
         # アニメーションの設定
-        self.ani = FuncAnimation(self.fig, self.update_plot, interval=100)
+        self.ani = FuncAnimation(self.fig, self.update_plot, interval=1)
 
     def save_to_csv(self):
         # ファイル保存ダイアログを開く
@@ -104,9 +103,9 @@ class AccelerometerGUI:
     def update_channel_status(self, channel, message):
         """チャネルのエラーステータスを更新"""
         if "*** ERROR ***" in message:
-            self.channel_status[channel].config(text=f"CH {channel}: Error", bg="red")
+            self.channel_status[channel].config(text=f"CH {channel}: Error", bg="DarkRed")
         else:
-            self.channel_status[channel].config(text=f"CH {channel}: OK", bg="green")
+            self.channel_status[channel].config(text=f"CH {channel}: OK", bg="light green")
 
     def scan_serial_ports(self):
         """COMポート2番から8番までスキャンし、有効なポートを見つける"""
@@ -118,7 +117,7 @@ class AccelerometerGUI:
 
                 # COMポートにブレーク信号を送信
                 ser.send_break(duration=0.25)  # ブレーク信号を送信
-                time.sleep(1)  # デバイスの応答を待つための遅延
+                time.sleep(.2)  # デバイスの応答を待つための遅延
 
                 # メッセージを複数行読み込んで確認
                 lines = []
@@ -195,14 +194,14 @@ class AccelerometerGUI:
 
                             # 12バイトの加速度データ (6バイト×2チャネル)
                             acc_data = self.serial_port.read(6)
-                            x_acc, y_acc, z_acc = struct.unpack('<hhh', acc_data)  # 小さいエンディアンで2バイト整数をデコード
+                            x_acc, y_acc, z_acc = struct.unpack('>hhh', acc_data)  # ビッグエンディアンで2バイト整数をデコード
                             x_acc = x_acc / ACC_SCALE  # スケーリング
                             y_acc = y_acc / ACC_SCALE
                             z_acc = z_acc / ACC_SCALE
                             
                             # 12バイトのジャイロデータ (6バイト×2チャネル)
                             gyro_data = self.serial_port.read(6)
-                            x_gyro, y_gyro, z_gyro = struct.unpack('<hhh', gyro_data)
+                            x_gyro, y_gyro, z_gyro = struct.unpack('>hhh', gyro_data)
                             x_gyro = x_gyro / GYRO_SCALE  # スケーリング
                             y_gyro = y_gyro / GYRO_SCALE
                             z_gyro = z_gyro / GYRO_SCALE
