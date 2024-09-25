@@ -70,6 +70,7 @@ class AccelerometerGUI:
             print("No valid COM port found.")
             return
         
+        print("threading.Thread(target=self.read_serial_data)")
         # シリアルポートからデータを読み込むスレッドを開始
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.start()
@@ -114,30 +115,65 @@ class AccelerometerGUI:
             try:
                 print(f"Trying {com_port}...")
                 ser = serial.Serial(com_port, BAUD_RATE, timeout=1)
-                
+
                 # COMポートにブレーク信号を送信
                 ser.send_break(duration=0.25)  # ブレーク信号を送信
-                
                 time.sleep(1)  # デバイスの応答を待つための遅延
 
                 # メッセージを複数行読み込んで確認
                 lines = []
-                for _ in range(5):  # 複数行取得する
+                for _ in range(4):  # 複数行取得する
                     line = ser.readline().decode('utf-8').strip()
                     lines.append(line)
                     print(f"Received: {line}")
-
                 # 正しいメッセージが含まれているか確認
                 welcome_message = "\n".join(lines)
                 if "KOMATSU Experiment" in welcome_message:
                     print(f"Valid COM port found: {com_port}")
+
+                    # チャネルごとのメッセージ処理
+                    channel_status = {}
+                    for ch in range(1, 5):  # CH 1 から CH 4 まで処理
+                    
+                        line = ser.readline().decode('utf-8').strip()
+                        if line.startswith(f"CH {ch}"):
+                            # CH n が始まったら、次の数行を処理
+                            whoami_line = ser.readline().decode('utf-8').strip()
+                            if "WHOAMI" in whoami_line:
+                                whoami_value = whoami_line.split('=')[-1].strip()
+                                
+                                # WHOAMI値が0x00ならエラーとみなす
+                                if whoami_value == "0x 0":
+                                    channel_status[ch] = "*** ERROR ***"
+                                    print(f"CH {ch} : error.  WHOAMI = {whoami_value}")
+                                    line = ser.readline().decode('utf-8').strip() # 読み飛ばし
+                                else:
+                                    channel_status[ch] = "OK"
+                                    print(f"CH {ch} : OK.     WHOAMI = {whoami_value}")
+                                
+                                # 残りのメッセージ（エラーまたはセンサー情報）を処理
+                                sensor_status = []
+                                for _ in range(3):  # 次の3行を読む
+                                    status_line = ser.readline().decode('utf-8').strip()
+                                    sensor_status.append(status_line)
+                                
+                                # エラーメッセージが含まれていればエラーと判断
+                                if any("*** ERROR ***" in line for line in sensor_status):
+                                    channel_status[ch] = "*** ERROR *** acc and gyro sensor does not respond correctly!"
+                                
+                                # ステータスをGUIに反映
+                                self.update_channel_status(ch, channel_status[ch])
+                                    
+                              
                     ser.write(b's')  # 's' を送信してデータ送信を開始
                     return ser  # 有効なポートを開いた状態で返す
                 else:
                     ser.close()  # 無効な場合はポートを閉じる
+
             except (serial.SerialException, UnicodeDecodeError):
                 print(f"{com_port} is not valid.")
         return None
+
 
     def read_serial_data(self):
         try:
@@ -146,19 +182,31 @@ class AccelerometerGUI:
                 
                 # ヘッダーチェック ('*' で始まるか)
                 if header == b'*':
-                    # 12バイトの加速度データ (6バイト×2チャネル)
-                    acc_data = self.serial_port.read(6)
-                    x_acc, y_acc, z_acc = struct.unpack('<hhh', acc_data)  # 小さいエンディアンで2バイト整数をデコード
-                    x_acc = x_acc / ACC_SCALE  # スケーリング
-                    y_acc = y_acc / ACC_SCALE
-                    z_acc = z_acc / ACC_SCALE
-                    
-                    # 12バイトのジャイロデータ (6バイト×2チャネル)
-                    gyro_data = self.serial_port.read(6)
-                    x_gyro, y_gyro, z_gyro = struct.unpack('<hhh', gyro_data)
-                    x_gyro = x_gyro / GYRO_SCALE  # スケーリング
-                    y_gyro = y_gyro / GYRO_SCALE
-                    z_gyro = z_gyro / GYRO_SCALE
+
+                    for ch in [0,1,2,3]:
+
+                        if(ch != 1): 
+                            # 読み捨てる
+                            # 12バイトの加速度データ (6バイト×2チャネル)
+                            acc_data = self.serial_port.read(6)
+                            # 12バイトのジャイロデータ (6バイト×2チャネル)
+                            gyro_data = self.serial_port.read(6)
+                        else:
+
+                            # 12バイトの加速度データ (6バイト×2チャネル)
+                            acc_data = self.serial_port.read(6)
+                            x_acc, y_acc, z_acc = struct.unpack('<hhh', acc_data)  # 小さいエンディアンで2バイト整数をデコード
+                            x_acc = x_acc / ACC_SCALE  # スケーリング
+                            y_acc = y_acc / ACC_SCALE
+                            z_acc = z_acc / ACC_SCALE
+                            
+                            # 12バイトのジャイロデータ (6バイト×2チャネル)
+                            gyro_data = self.serial_port.read(6)
+                            x_gyro, y_gyro, z_gyro = struct.unpack('<hhh', gyro_data)
+                            x_gyro = x_gyro / GYRO_SCALE  # スケーリング
+                            y_gyro = y_gyro / GYRO_SCALE
+                            z_gyro = z_gyro / GYRO_SCALE
+                            # print('*')
 
                     # タイムスタンプを読み取る
                     time_data = self.serial_port.read(1)
