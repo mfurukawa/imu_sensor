@@ -20,6 +20,7 @@ class AccelerometerGUI:
         
         # シリアルポートから読み込んだデータを保存するリスト
         self.data = {'x': [], 'y': [], 'z': [], 'time': []}
+        self.is_running = True  # スレッド終了用フラグ
 
         # CSVファイル保存用の変数
         self.csv_file = None
@@ -47,6 +48,9 @@ class AccelerometerGUI:
         # CSV保存ボタン
         self.save_button = tk.Button(self.root, text="Save to CSV", command=self.save_to_csv)
         self.save_button.pack(side=tk.LEFT)
+
+        # ウィンドウ終了イベントを設定
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # シリアルポートをスキャンして接続を確立
         self.serial_port = self.scan_serial_ports()
@@ -90,8 +94,15 @@ class AccelerometerGUI:
                 
                 time.sleep(1)  # デバイスの応答を待つための遅延
 
-                # メッセージを読み込んで、条件に合致するかを確認
-                welcome_message = ser.readline().decode('utf-8').strip()
+                # メッセージを複数行読み込んで確認
+                lines = []
+                for _ in range(5):  # 複数行取得する
+                    line = ser.readline().decode('utf-8').strip()
+                    lines.append(line)
+                    print(f"Received: {line}")
+
+                # 正しいメッセージが含まれているか確認
+                welcome_message = "\n".join(lines)
                 if "KOMATSU Experiment" in welcome_message:
                     print(f"Valid COM port found: {com_port}")
                     return ser  # 有効なポートを開いた状態で返す
@@ -102,22 +113,24 @@ class AccelerometerGUI:
         return None
 
     def read_serial_data(self):
+        channel = None  # 初期化しておく
         try:
-            with self.serial_port as ser:
-                start_time = time.time()
-                channel = None
-                while True:
-                    line = ser.readline().decode('utf-8').strip()
+            while self.is_running:  # フラグがTrueの間実行
+                if self.serial_port.in_waiting > 0:  # データが存在する場合にのみ読み込む
+                    line = self.serial_port.readline().decode('utf-8').strip()
                     
                     if line.startswith("CH"):
                         # チャネルを取得
-                        channel = int(line.split()[1])
+                        try:
+                            channel = int(line.split()[1])
+                        except (IndexError, ValueError):
+                            channel = None  # 何か問題があれば初期化
 
                     if channel and "WHOAMI" in line:
                         # チャネルごとのステータスを確認
                         sensor_status = []
                         for _ in range(3):  # エラーメッセージが3行続くと想定
-                            status_line = ser.readline().decode('utf-8').strip()
+                            status_line = self.serial_port.readline().decode('utf-8').strip()
                             sensor_status.append(status_line)
 
                         # チャネルのステータスを更新
@@ -128,7 +141,7 @@ class AccelerometerGUI:
                         # 有効なチャネルから加速度データを取得し、解析
                         try:
                             x, y, z = map(float, line.split()[1:4])
-                            current_time = time.time() - start_time
+                            current_time = time.time() - time.time()
                             self.data['x'].append(x)
                             self.data['y'].append(y)
                             self.data['z'].append(z)
@@ -144,7 +157,7 @@ class AccelerometerGUI:
                             continue
 
         except serial.SerialException as e:
-            print(f"Error opening serial port: {e}")
+            print(f"Error reading from serial port: {e}")
 
     def update_plot(self, frame):
         # グラフにリアルタイムデータをプロット
@@ -153,6 +166,15 @@ class AccelerometerGUI:
         self.line_z.set_data(range(len(self.data['z'])), self.data['z'])
         self.ax.set_xlim(0, max(100, len(self.data['x'])))
         self.canvas.draw()
+
+    def on_closing(self):
+        """×ボタンが押された時の処理"""
+        print("Closing application...")
+        self.is_running = False  # スレッドを停止するフラグを設定
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.close()  # シリアルポートを閉じる
+        self.root.quit()  # Tkinterのメインループを停止
+        self.root.destroy()  # ウィンドウを閉じる
 
 # Tkinterのメインループ
 root = tk.Tk()
