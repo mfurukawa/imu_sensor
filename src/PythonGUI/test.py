@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import ttk
 import serial
 import csv
 import struct  # バイト列の解析に使用
@@ -37,15 +38,81 @@ class AccelerometerGUI:
         self.channel_status = {}
         frame_tool_bar = tk.Frame(self.root, borderwidth = 10)
         for i in range(1, 5):
-            label = tk.Label(frame_tool_bar, text=f"  CH {i}: Unknown  ", bg="gray", height = 2, font=("MSゴシック", "14", "bold"))
+            label = tk.Label(frame_tool_bar, text=f"  CH {i}: Unknown  ", bg="gray", height = 2, font=("MSゴシック", "12", "bold"))
             label.pack(side=tk.LEFT)
             self.channel_status[i] = label
             
-        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", height = 2, font=("MSゴシック", "18", "bold"))
+        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", font=("MSゴシック", "16", "bold"))
         label.pack(side=tk.LEFT)
         self.channel_status[5] = label
         frame_tool_bar.pack(fill = tk.X)
 
+        # Acc/Gryo Setup
+        # 項目をつくる
+        frame_scale = tk.Frame(self.root, borderwidth=10)
+        
+        # 項目1
+        items1 = ttk.Combobox(frame_scale, state='readonly', width=20, font=("MSゴシック", "14", "bold"))
+        items1['values'] = ('Acc scale 2G', 'Acc scale 4G', 'Acc scale 8G', 'Acc scale 16G')
+        items1.current(0)  # デフォルト値を設定
+        items1.pack(side=tk.LEFT)
+        
+        # 項目2
+        items2 = ttk.Combobox(frame_scale, state='readonly', width=20, font=("MSゴシック", "14", "bold"))
+        items2['values'] = ('Gyro scale 250DPS', 'Gyro scale 500DPS', 'Gyro scale 1000DPS', 'Gyro scale 2000DPS')
+        items2.current(0)  # デフォルト値を設定
+        items2.pack(side=tk.LEFT)
+        
+        frame_scale.pack(fill=tk.X)
+        
+        # スケール変更時のイベントハンドラを設定
+        items1.bind("<<ComboboxSelected>>", self.update_acc_scale)
+        items2.bind("<<ComboboxSelected>>", self.update_gyro_scale)
+
+
+
+    #     case BITS_FS_2G:
+    #         acc_divider=16384;
+    #     break;
+    #     case BITS_FS_4G:
+    #         acc_divider=8192;
+    #     break;
+    #     case BITS_FS_8G:
+    #         acc_divider=4096;
+    #     break;
+    #     case BITS_FS_16G:
+    #         acc_divider=2048;
+    #     break;   
+   
+    # }    switch (scale){
+    #     case BITS_FS_250DPS:
+    #         gyro_divider=131;
+    #     break;
+    #     case BITS_FS_500DPS:
+    #         gyro_divider=65.5;
+    #     break;
+    #     case BITS_FS_1000DPS:
+    #         gyro_divider=32.8;
+    #     break;
+    #     case BITS_FS_2000DPS:
+    #         gyro_divider=16.4;
+    #     break;   
+    # }
+    # temp_scale=WriteReg(MPUREG_GYRO_CONFIG|READ_FLAG, 0x00);
+    # switch (temp_scale){
+    #     case BITS_FS_250DPS:
+    #         temp_scale=250;
+    #     break;
+    #     case BITS_FS_500DPS:
+    #         temp_scale=500;
+    #     break;
+    #     case BITS_FS_1000DPS:
+    #         temp_scale=1000;
+    #     break;
+    #     case BITS_FS_2000DPS:
+    #         temp_scale=2000;
+    #     break;   
+    # }
         # グラフの初期設定
         self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
 
@@ -112,7 +179,15 @@ class AccelerometerGUI:
 
         # Realtime Clock
         self.milliseconds_start = int(time.time() * 1000)
-               
+      
+    # スケール変更時のイベントハンドラ
+    def update_acc_scale(self, event):
+        return
+    
+    # スケール変更時のイベントハンドラ
+    def update_gyro_scale(self, event):
+        return
+             
     # シリアルポートから読み込んだデータを保存するリスト
     def clear_data(self):
         self.data = {'x_acc': [], 'y_acc': [], 'z_acc': [],
@@ -323,7 +398,7 @@ class AccelerometerGUI:
         self.ax_gyro.set_xlim(max(100, min_len) - 100, max(100, min_len))
 
         # レコード長を表示
-        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", height = 2, font=("MSゴシック", "18", "bold"))
+        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", font=("MSゴシック", "16", "bold"))
         # print(min_len)
 
         # キャンバスの更新
