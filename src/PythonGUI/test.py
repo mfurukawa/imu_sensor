@@ -35,10 +35,16 @@ class AccelerometerGUI:
 
         # チャネル状態を表示するラベル
         self.channel_status = {}
+        frame_tool_bar = tk.Frame(self.root, borderwidth = 10)
         for i in range(1, 5):
-            label = tk.Label(self.root, text=f"CH {i}: Unknown", bg="gray")
-            label.pack(side=tk.LEFT, fill=tk.Y)
+            label = tk.Label(frame_tool_bar, text=f"  CH {i}: Unknown  ", bg="gray", height = 2, font=("MSゴシック", "14", "bold"))
+            label.pack(side=tk.LEFT)
             self.channel_status[i] = label
+            
+        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", height = 2, font=("MSゴシック", "18", "bold"))
+        label.pack(side=tk.LEFT)
+        self.channel_status[5] = label
+        frame_tool_bar.pack(fill = tk.X)
 
         # グラフの初期設定
         self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
@@ -69,14 +75,18 @@ class AccelerometerGUI:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
         # CSV保存ボタン
-        self.save_button = tk.Button(self.root, text="Save to CSV", command=self.save_to_csv)
+        self.save_button = tk.Button(self.root, text="  Save to CSV [S]  ", font=("MSゴシック", "14", "bold"), command=self.save_to_csv)
         self.save_button.pack(side=tk.LEFT)
 
         # データ計測開始・停止ボタン
-        self.start_button = tk.Button(self.root, text="Start Measurement", command=self.start_measurement)
+        self.start_button = tk.Button(self.root, text="  Start Measurement [s]  ", font=("MSゴシック", "14", "bold"), command=self.start_measurement)
         self.start_button.pack(side=tk.LEFT)
-        self.stop_button = tk.Button(self.root, text="Stop Measurement", command=self.stop_measurement)
+        self.stop_button = tk.Button(self.root, text="  Stop Measurement [r] ", font=("MSゴシック", "14", "bold"), command=self.stop_measurement)
         self.stop_button.pack(side=tk.LEFT)
+
+        # クリアボタン
+        self.save_button = tk.Button(self.root, text="  Clear Data [c]  ", font=("MSゴシック", "14", "bold"), command=self.stop_and_clear)
+        self.save_button.pack(side=tk.LEFT)
 
         # ウィンドウ終了イベントを設定
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -107,6 +117,10 @@ class AccelerometerGUI:
     def clear_data(self):
         self.data = {'x_acc': [], 'y_acc': [], 'z_acc': [],
                     'x_gyro': [], 'y_gyro': [], 'z_gyro': [], 'time': []}
+
+    def stop_and_clear(self):
+        self.stop_measurement()
+        self.clear_data()
 
     # Key Event Handler
     def key_event(self, e):
@@ -156,9 +170,9 @@ class AccelerometerGUI:
     def update_channel_status(self, channel, message):
         """チャネルのエラーステータスを更新"""
         if "*** ERROR ***" in message:
-            self.channel_status[channel].config(text=f"CH {channel}: Error", bg="DarkRed")
+            self.channel_status[channel].config(text=f"  CH {channel}: Error  ", bg="Salmon")
         else:
-            self.channel_status[channel].config(text=f"CH {channel}: OK", bg="light green")
+            self.channel_status[channel].config(text=f"    CH {channel}: OK   ", bg="light green")
 
     def scan_serial_ports(self):
         """COMポート2番から8番までスキャンし、有効なポートを見つける"""
@@ -283,8 +297,8 @@ class AccelerometerGUI:
                         self.data['time'].pop(0)
                 
                 #読み落としがあるか確認        
-                else:
-                    print('/')
+                #else:
+                    #print('/')
 
         except serial.SerialException as e:
             print(f"Error reading from serial port: {e}")
@@ -308,10 +322,12 @@ class AccelerometerGUI:
         self.ax_acc.set_xlim(max(100, min_len) - 100, max(100, min_len))
         self.ax_gyro.set_xlim(max(100, min_len) - 100, max(100, min_len))
 
+        # レコード長を表示
+        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", height = 2, font=("MSゴシック", "18", "bold"))
+        # print(min_len)
+
         # キャンバスの更新
         self.canvas.draw()
-
-        print(min_len)
 
     def on_closing(self):
         """×ボタンが押された時の処理"""
