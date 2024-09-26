@@ -23,10 +23,11 @@ class AccelerometerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Accelerometer & Gyroscope Data Logger")
-        
-        # シリアルポートから読み込んだデータを保存するリスト
-        self.data = {'x_acc': [], 'y_acc': [], 'z_acc': [],
-                     'x_gyro': [], 'y_gyro': [], 'z_gyro': [], 'time': []}
+
+        # get key event
+        self.root.bind("<KeyPress>", self.key_event)     
+
+        self.clear_data()
         self.is_running = True  # スレッド終了用フラグ
 
         # CSVファイル保存用の変数
@@ -36,16 +37,16 @@ class AccelerometerGUI:
         self.channel_status = {}
         for i in range(1, 5):
             label = tk.Label(self.root, text=f"CH {i}: Unknown", bg="gray")
-            label.pack(side=tk.TOP, fill=tk.X)
+            label.pack(side=tk.LEFT, fill=tk.Y)
             self.channel_status[i] = label
 
         # グラフの初期設定
         self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
 
         # 加速度グラフ
-        self.line_x_acc, = self.ax_acc.plot([], [], label="X-acc")
-        self.line_y_acc, = self.ax_acc.plot([], [], label="Y-acc")
-        self.line_z_acc, = self.ax_acc.plot([], [], label="Z-acc")
+        self.line_x_acc, = self.ax_acc.plot([], [], label="X-acc", color='r')
+        self.line_y_acc, = self.ax_acc.plot([], [], label="Y-acc", color='g')
+        self.line_z_acc, = self.ax_acc.plot([], [], label="Z-acc", color='b')
         self.ax_acc.set_xlim(0, 500)
         self.ax_acc.set_ylim(-5, 5)
         self.ax_acc.set_ylabel("Acceleration [G]")
@@ -59,7 +60,7 @@ class AccelerometerGUI:
         self.ax_gyro.set_xlim(0, 500)
         self.ax_gyro.set_ylim(-500, 500)
         self.ax_gyro.set_ylabel("Gyro [rps]")
-        self.ax_gyro.set_xlabel("Time [s]")
+        self.ax_gyro.set_xlabel("Time [sample]")
         self.ax_gyro.set_title("Gyroscope")
         self.ax_gyro.legend()
 
@@ -80,6 +81,9 @@ class AccelerometerGUI:
         # ウィンドウ終了イベントを設定
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
+        # Active Port
+        self.active_port = 999
+
         # シリアルポートをスキャンして接続を確立
         self.serial_port = self.scan_serial_ports()
         if self.serial_port is None:
@@ -96,8 +100,35 @@ class AccelerometerGUI:
         # アニメーションの設定 (グラフの描画は間引いて行う)
         self.ani = FuncAnimation(self.fig, self.update_plot, interval=5)
 
+        # Realtime Clock
         self.milliseconds_start = int(time.time() * 1000)
-                    
+               
+    # シリアルポートから読み込んだデータを保存するリスト
+    def clear_data(self):
+        self.data = {'x_acc': [], 'y_acc': [], 'z_acc': [],
+                    'x_gyro': [], 'y_gyro': [], 'z_gyro': [], 'time': []}
+
+    # Key Event Handler
+    def key_event(self, e):
+        key = e.keysym
+        
+        if key == "c":
+            self.stop_measurement()
+            self.clear_data()
+        
+        if key == "s":
+            self.start_measurement()
+        
+        if key == "r":
+            self.stop_measurement()
+
+        if key == "S":
+            self.stop_measurement()
+            self.save_to_csv()
+        if key == "Escape":
+            self.stop_measurement()
+            self.on_closing()
+
 
     def save_to_csv(self):
         # ファイル保存ダイアログを開く
@@ -163,19 +194,21 @@ class AccelerometerGUI:
                                 whoami_value = whoami_line.split('=')[-1].strip()
                                 
                                 # WHOAMI値が0x00ならエラーとみなす
-                                if whoami_value == "0x 0":
+                                if whoami_value == "0x71":
+                                    channel_status[ch] = "OK"
+                                    print(f"CH {ch} : OK.     WHOAMI = {whoami_value}")
+                                    self.active_port = ch
+                                else:
                                     channel_status[ch] = "*** ERROR ***"
                                     print(f"CH {ch} : error.  WHOAMI = {whoami_value}")
                                     ser.readline().decode('utf-8').strip()  # 読み飛ばし
-                                else:
-                                    channel_status[ch] = "OK"
-                                    print(f"CH {ch} : OK.     WHOAMI = {whoami_value}")
                                 
                                 # 残りのメッセージ（エラーまたはセンサー情報）を処理
                                 sensor_status = []
                                 for _ in range(3):  # 次の3行を読む
                                     status_line = ser.readline().decode('utf-8').strip()
                                     sensor_status.append(status_line)
+                                    print(status_line)
                                 
                                 # エラーメッセージが含まれていればエラーと判断
                                 if any("*** ERROR ***" in line for line in sensor_status):
@@ -203,7 +236,7 @@ class AccelerometerGUI:
                 if header == b'*':
 
                     for ch in range(1, 5):  # CH 1 から CH 4 まで処理
-                        if ch==3:
+                        if ch == self.active_port:
                             # データを順次読み取る
                             acc_data = self.serial_port.read(6)
                             x_acc, y_acc, z_acc = struct.unpack('>hhh', acc_data)  # ビッグエンディアンでデコード
@@ -293,6 +326,8 @@ class AccelerometerGUI:
         self.root.quit()  # Tkinterのメインループを停止
         self.root.destroy()  # ウィンドウを閉じる
 
+        
+    
 # Tkinterのメインループ
 root = tk.Tk()
 app = AccelerometerGUI(root)
