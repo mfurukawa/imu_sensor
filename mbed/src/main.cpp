@@ -85,10 +85,10 @@ void init(void)
             errFlag |= 0x01<<(i*2);
         }
 
-        printf("Gyro_scale=%u[DPS]\n",imu[i]->set_gyro_scale(BITS_FS_500DPS));    //Set 500DPS scale range for gyros    //0706 wada 500to2000
+        printf("Gyro_scale=%u[DPS]\n",imu[i]->set_gyro_scale(BITS_FS_2000DPS));
         wait_ms(20);
         
-        printf("Acc_scale=%u[G]\n",imu[i]->set_acc_scale(BITS_FS_4G));          //Set 4G scale range for accs        //0706 wada 4to16
+        printf("Acc_scale=%u[G]\n",imu[i]->set_acc_scale(BITS_FS_16G));
         wait_ms(20);
         //printf("AK8963 WHIAM=0x%2x\n",imu[i]->AK8963_whoami());
         
@@ -196,14 +196,14 @@ int main()
                 case 'L':
                     ticker.detach();        
                     c = pc.getc();  // read second byte
-                    if('0' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_256HZ_NOLPF2);  
-                    if('1' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_188HZ);
-                    if('2' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_98HZ);
-                    if('3' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_42HZ); 
-                    if('4' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_20HZ);  
-                    if('5' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_10HZ);
-                    if('6' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_5HZ);
-                    if('7' == c)  imu[1]->set_gyro_scale(BITS_DLPF_CFG_2100HZ_NOLPF); 
+                    if('0' == c)  imu[1]->init(1, BITS_DLPF_CFG_256HZ_NOLPF2);  
+                    if('1' == c)  imu[1]->init(1, BITS_DLPF_CFG_188HZ);
+                    if('2' == c)  imu[1]->init(1, BITS_DLPF_CFG_98HZ);
+                    if('3' == c)  imu[1]->init(1, BITS_DLPF_CFG_42HZ); 
+                    if('4' == c)  imu[1]->init(1, BITS_DLPF_CFG_20HZ);  
+                    if('5' == c)  imu[1]->init(1, BITS_DLPF_CFG_10HZ);
+                    if('6' == c)  imu[1]->init(1, BITS_DLPF_CFG_5HZ);
+                    if('7' == c)  imu[1]->init(1, BITS_DLPF_CFG_2100HZ_NOLPF); 
                     wait_ms(20);
                     break;
 

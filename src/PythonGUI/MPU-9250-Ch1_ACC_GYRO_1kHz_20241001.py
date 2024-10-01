@@ -17,10 +17,79 @@ BAUD_RATE = 921600  # ボーレートを921600に設定
 DATA_LENGTH = 100000
 
 # データのスケーリング用
-ACC_SCALE = 32768.0 / 2.0 # 例: 加速度のスケーリングファクター
-GYRO_SCALE = 131.0 / 2.0  # 例: ジャイロのスケーリングファクター
+ACC_SCALE = 32768.0 / 16.0 # 例: 加速度のスケーリングファクター
+GYRO_SCALE = 131.0 / 8.0   # 例: ジャイロのスケーリングファクター
 
 class AccelerometerGUI:
+    
+    # スケール変更時のイベントハンドラ
+    def update_acc_scale(self, event):
+        self.stop_measurement()
+        self.clear_data()
+        selected_scale = event.widget.get()
+        global ACC_SCALE
+        if selected_scale == 'Acc scale 2G':
+            ACC_SCALE = 32768.0 / 2.0
+            cmd = b'0'        
+            self.ax_acc.set_ylim(-3, 3)
+        elif selected_scale == 'Acc scale 4G':
+            ACC_SCALE = 32768.0 / 4.0
+            cmd = b'1'
+            self.ax_acc.set_ylim(-6, 6)
+        elif selected_scale == 'Acc scale 8G':
+            ACC_SCALE = 32768.0 / 8.0
+            cmd = b'2'
+            self.ax_acc.set_ylim(-10, 10)
+        elif selected_scale == 'Acc scale 16G':
+            ACC_SCALE = 32768.0 / 16.0
+            cmd = b'3'
+            self.ax_acc.set_ylim(-20, 20)
+        else:
+            ACC_SCALE = 32768.0 / 16.0  # デフォルト値
+            cmd = b'3'        
+            self.ax_acc.set_ylim(-20, 20)
+        
+        """ACC SCALE設定のために 'A' を送信"""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.write(b'A')
+            self.serial_port.write(cmd)
+            print(f"Acceleration scale set to: {selected_scale}")
+        return
+    
+    # スケール変更時のイベントハンドラ
+    def update_gyro_scale(self, event):
+        self.stop_measurement()
+        self.clear_data()
+        selected_scale = event.widget.get()
+        global GYRO_SCALE
+        if selected_scale == 'Gyro scale 250DPS':
+            GYRO_SCALE = 131.0 
+            cmd = b'0'
+            self.ax_gyro.set_ylim(-300, 300)
+        elif selected_scale == 'Gyro scale 500DPS':
+            GYRO_SCALE = 131.0 / 2.0
+            cmd = b'1'
+            self.ax_gyro.set_ylim(-600, 600)
+        elif selected_scale == 'Gyro scale 1000DPS':
+            GYRO_SCALE = 131.0 / 4.0
+            cmd = b'2'
+            self.ax_gyro.set_ylim(-1100, 1100)
+        elif selected_scale == 'Gyro scale 2000DPS':
+            GYRO_SCALE = 131.0 / 8.0
+            cmd = b'3'
+            self.ax_gyro.set_ylim(-2200, 2200)
+        else:
+            GYRO_SCALE = 131.0 / 8.0   # デフォルト値
+            cmd = b'3'
+            self.ax_gyro.set_ylim(-2200, 2200)
+
+        """GYRO SCALE 設定のために 'G' を送信"""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.write(b'G')
+            self.serial_port.write(cmd)
+            print(f"Gyroscope scale set to: {selected_scale}")
+        return
+    
     def __init__(self, root):
         self.root = root
         self.root.title("Accelerometer & Gyroscope Data Logger")
@@ -42,25 +111,25 @@ class AccelerometerGUI:
             label.pack(side=tk.LEFT)
             self.channel_status[i] = label
             
-        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", font=("MSゴシック", "16", "bold"))
+        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", font=("MSゴシック", "14", "bold"))
         label.pack(side=tk.LEFT)
         self.channel_status[5] = label
         frame_tool_bar.pack(fill = tk.X)
 
         # Acc/Gryo Setup
-        # 項目をつくる
+        # 設定項目をつくる
         frame_scale = tk.Frame(self.root, borderwidth=10)
         
         # 項目1
         items1 = ttk.Combobox(frame_scale, state='readonly', width=20)
         items1['values'] = ('Acc scale 2G', 'Acc scale 4G', 'Acc scale 8G', 'Acc scale 16G')
-        items1.current(0)  # デフォルト値を設定
+        items1.current(3)  # デフォルト値を設定
         items1.pack(side=tk.LEFT)
         
         # 項目2
         items2 = ttk.Combobox(frame_scale, state='readonly', width=20)
         items2['values'] = ('Gyro scale 250DPS', 'Gyro scale 500DPS', 'Gyro scale 1000DPS', 'Gyro scale 2000DPS')
-        items2.current(0)  # デフォルト値を設定
+        items2.current(3)  # デフォルト値を設定
         items2.pack(side=tk.LEFT)
         
         frame_scale.pack(fill=tk.X)
@@ -77,7 +146,7 @@ class AccelerometerGUI:
         self.line_y_acc, = self.ax_acc.plot([], [], label="Y-acc", color='g')
         self.line_z_acc, = self.ax_acc.plot([], [], label="Z-acc", color='b')
         self.ax_acc.set_xlim(0, 500)
-        self.ax_acc.set_ylim(-5, 5)
+        self.ax_acc.set_ylim(-20, 20)
         self.ax_acc.set_ylabel("Acceleration [G]")
         self.ax_acc.set_title("Acceleration")
         self.ax_acc.legend(loc='upper right')
@@ -87,8 +156,8 @@ class AccelerometerGUI:
         self.line_y_gyro, = self.ax_gyro.plot([], [], label="Y-gyro", color='g')
         self.line_z_gyro, = self.ax_gyro.plot([], [], label="Z-gyro", color='b')
         self.ax_gyro.set_xlim(0, 500)
-        self.ax_gyro.set_ylim(-500, 500)
-        self.ax_gyro.set_ylabel("Gyro [rps]")
+        self.ax_gyro.set_ylim(-2200, 2200)
+        self.ax_gyro.set_ylabel("Gyro [Degree per second]")
         self.ax_gyro.set_xlabel("Time [sample]")
         self.ax_gyro.set_title("Gyroscope")
         self.ax_gyro.legend(loc='upper right')
@@ -133,42 +202,6 @@ class AccelerometerGUI:
         # アニメーションの設定 (グラフの描画は間引いて行う)
         self.ani = FuncAnimation(self.fig, self.update_plot, interval=100)
       
-    # スケール変更時のイベントハンドラ
-    def update_acc_scale(self, event):
-        selected_scale = event.widget.get()
-        global ACC_SCALE
-        if selected_scale == 'Acc scale 2G':
-            ACC_SCALE = 32768.0 / 2.0
-            cmd = b'0'        
-            self.ax_acc.set_ylim(-3, 3)
-        elif selected_scale == 'Acc scale 4G':
-            ACC_SCALE = 32768.0 / 4.0
-            cmd = b'1'
-            self.ax_acc.set_ylim(-6, 6)
-        elif selected_scale == 'Acc scale 8G':
-            ACC_SCALE = 32768.0 / 8.0
-            cmd = b'2'
-            self.ax_acc.set_ylim(-10, 10)
-        elif selected_scale == 'Acc scale 16G':
-            ACC_SCALE = 32768.0 / 16.0
-            cmd = b'3'
-            self.ax_acc.set_ylim(-20, 20)
-        else:
-            ACC_SCALE = 32768.0 / 2.0  # デフォルト値
-            cmd = b'0'        
-            self.ax_acc.set_ylim(-3, 3)
-
-        
-        """データ計測開始のために 's' を送信"""
-        if self.serial_port and self.serial_port.is_open:
-            self.serial_port.write(b'A')
-            self.serial_port.write(cmd)
-            print(f"Acceleration scale set to: {selected_scale}")
-        return
-    
-    # スケール変更時のイベントハンドラ
-    def update_gyro_scale(self, event):
-        return
              
     # シリアルポートから読み込んだデータを保存するリスト
     def clear_data(self):
@@ -295,7 +328,7 @@ class AccelerometerGUI:
                                 # ステータスをGUIに反映
                                 self.update_channel_status(ch, channel_status[ch])
                                     
-                    ser.write(b's')  # 's' を送信してデータ送信を開始
+                    #ser.write(b's')  # 's' を送信してデータ送信を開始
                     return ser  # 有効なポートを開いた状態で返す
                 else:
                     ser.close()  # 無効な場合はポートを閉じる
