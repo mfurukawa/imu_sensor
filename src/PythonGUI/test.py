@@ -17,7 +17,7 @@ BAUD_RATE = 921600  # ボーレートを921600に設定
 DATA_LENGTH = 100000
 
 # データのスケーリング用
-ACC_SCALE = 16384.0 / 2.0 # 例: 加速度のスケーリングファクター
+ACC_SCALE = 32768.0 / 2.0 # 例: 加速度のスケーリングファクター
 GYRO_SCALE = 131.0 / 2.0  # 例: ジャイロのスケーリングファクター
 
 class AccelerometerGUI:
@@ -52,13 +52,13 @@ class AccelerometerGUI:
         frame_scale = tk.Frame(self.root, borderwidth=10)
         
         # 項目1
-        items1 = ttk.Combobox(frame_scale, state='readonly', width=20, font=("MSゴシック", "14", "bold"))
+        items1 = ttk.Combobox(frame_scale, state='readonly', width=20)
         items1['values'] = ('Acc scale 2G', 'Acc scale 4G', 'Acc scale 8G', 'Acc scale 16G')
         items1.current(0)  # デフォルト値を設定
         items1.pack(side=tk.LEFT)
         
         # 項目2
-        items2 = ttk.Combobox(frame_scale, state='readonly', width=20, font=("MSゴシック", "14", "bold"))
+        items2 = ttk.Combobox(frame_scale, state='readonly', width=20)
         items2['values'] = ('Gyro scale 250DPS', 'Gyro scale 500DPS', 'Gyro scale 1000DPS', 'Gyro scale 2000DPS')
         items2.current(0)  # デフォルト値を設定
         items2.pack(side=tk.LEFT)
@@ -69,50 +69,6 @@ class AccelerometerGUI:
         items1.bind("<<ComboboxSelected>>", self.update_acc_scale)
         items2.bind("<<ComboboxSelected>>", self.update_gyro_scale)
 
-
-
-    #     case BITS_FS_2G:
-    #         acc_divider=16384;
-    #     break;
-    #     case BITS_FS_4G:
-    #         acc_divider=8192;
-    #     break;
-    #     case BITS_FS_8G:
-    #         acc_divider=4096;
-    #     break;
-    #     case BITS_FS_16G:
-    #         acc_divider=2048;
-    #     break;   
-   
-    # }    switch (scale){
-    #     case BITS_FS_250DPS:
-    #         gyro_divider=131;
-    #     break;
-    #     case BITS_FS_500DPS:
-    #         gyro_divider=65.5;
-    #     break;
-    #     case BITS_FS_1000DPS:
-    #         gyro_divider=32.8;
-    #     break;
-    #     case BITS_FS_2000DPS:
-    #         gyro_divider=16.4;
-    #     break;   
-    # }
-    # temp_scale=WriteReg(MPUREG_GYRO_CONFIG|READ_FLAG, 0x00);
-    # switch (temp_scale){
-    #     case BITS_FS_250DPS:
-    #         temp_scale=250;
-    #     break;
-    #     case BITS_FS_500DPS:
-    #         temp_scale=500;
-    #     break;
-    #     case BITS_FS_1000DPS:
-    #         temp_scale=1000;
-    #     break;
-    #     case BITS_FS_2000DPS:
-    #         temp_scale=2000;
-    #     break;   
-    # }
         # グラフの初期設定
         self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
 
@@ -124,7 +80,7 @@ class AccelerometerGUI:
         self.ax_acc.set_ylim(-5, 5)
         self.ax_acc.set_ylabel("Acceleration [G]")
         self.ax_acc.set_title("Acceleration")
-        self.ax_acc.legend()
+        self.ax_acc.legend(loc='upper right')
 
         # ジャイログラフ
         self.line_x_gyro, = self.ax_gyro.plot([], [], label="X-gyro", color='r')
@@ -135,7 +91,7 @@ class AccelerometerGUI:
         self.ax_gyro.set_ylabel("Gyro [rps]")
         self.ax_gyro.set_xlabel("Time [sample]")
         self.ax_gyro.set_title("Gyroscope")
-        self.ax_gyro.legend()
+        self.ax_gyro.legend(loc='upper right')
 
         # CanvasをTkinterウィンドウに埋め込む
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
@@ -175,13 +131,39 @@ class AccelerometerGUI:
         self.serial_thread.start()
 
         # アニメーションの設定 (グラフの描画は間引いて行う)
-        self.ani = FuncAnimation(self.fig, self.update_plot, interval=5)
-
-        # Realtime Clock
-        self.milliseconds_start = int(time.time() * 1000)
+        self.ani = FuncAnimation(self.fig, self.update_plot, interval=100)
       
     # スケール変更時のイベントハンドラ
     def update_acc_scale(self, event):
+        selected_scale = event.widget.get()
+        global ACC_SCALE
+        if selected_scale == 'Acc scale 2G':
+            ACC_SCALE = 32768.0 / 2.0
+            cmd = b'0'        
+            self.ax_acc.set_ylim(-3, 3)
+        elif selected_scale == 'Acc scale 4G':
+            ACC_SCALE = 32768.0 / 4.0
+            cmd = b'1'
+            self.ax_acc.set_ylim(-6, 6)
+        elif selected_scale == 'Acc scale 8G':
+            ACC_SCALE = 32768.0 / 8.0
+            cmd = b'2'
+            self.ax_acc.set_ylim(-10, 10)
+        elif selected_scale == 'Acc scale 16G':
+            ACC_SCALE = 32768.0 / 16.0
+            cmd = b'3'
+            self.ax_acc.set_ylim(-20, 20)
+        else:
+            ACC_SCALE = 32768.0 / 2.0  # デフォルト値
+            cmd = b'0'        
+            self.ax_acc.set_ylim(-3, 3)
+
+        
+        """データ計測開始のために 's' を送信"""
+        if self.serial_port and self.serial_port.is_open:
+            self.serial_port.write(b'A')
+            self.serial_port.write(cmd)
+            print(f"Acceleration scale set to: {selected_scale}")
         return
     
     # スケール変更時のイベントハンドラ
@@ -214,6 +196,7 @@ class AccelerometerGUI:
         if key == "S":
             self.stop_measurement()
             self.save_to_csv()
+
         if key == "Escape":
             self.stop_measurement()
             self.on_closing()
@@ -225,10 +208,15 @@ class AccelerometerGUI:
         if file_path:
             with open(file_path, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Time[ms]', 'X-Acc', 'Y-Acc', 'Z-Acc', 'X-Gyro', 'Y-Gyro', 'Z-Gyro'])  # ヘッダーを書き込み
+                writer.writerow(['Time[ms]', 'X-Acc[G]', 'Y-Acc[G]', 'Z-Acc[G]', 'X-Gyro', 'Y-Gyro', 'Z-Gyro'])  # ヘッダーを書き込み
                 for i in range(len(self.data['time'])):
-                    writer.writerow([self.data['time'][i], self.data['x_acc'][i], self.data['y_acc'][i], self.data['z_acc'][i],
-                                     self.data['x_gyro'][i], self.data['y_gyro'][i], self.data['z_gyro'][i]])
+                    writer.writerow([self.data['time'][i], 
+                                     self.data['x_acc'][i]/ ACC_SCALE, 
+                                     self.data['y_acc'][i]/ ACC_SCALE, 
+                                     self.data['z_acc'][i]/ ACC_SCALE,
+                                     self.data['x_gyro'][i]/ GYRO_SCALE, 
+                                     self.data['y_gyro'][i]/ GYRO_SCALE, 
+                                     self.data['z_gyro'][i]/ GYRO_SCALE])
 
     def start_measurement(self):
         """データ計測開始のために 's' を送信"""
@@ -254,11 +242,11 @@ class AccelerometerGUI:
         for port_number in range(START_COM_PORT, END_COM_PORT + 1):
             com_port = f"COM{port_number}"
             try:
-                print(f"Trying {com_port}...")
+                print(f"Trying {com_port}...", end='')
                 ser = serial.Serial(com_port, BAUD_RATE, timeout=1)
 
                 # COMポートにブレーク信号を送信
-                ser.send_break(duration=0.20)  # ブレーク信号を送信
+                ser.send_break(duration=0.1)  # ブレーク信号を送信
                 time.sleep(.1)  # デバイスの応答を待つための遅延
 
                 # メッセージを複数行読み込んで確認
@@ -266,7 +254,8 @@ class AccelerometerGUI:
                 for _ in range(4):  # 複数行取得する
                     line = ser.readline().decode('utf-8').strip()
                     lines.append(line)
-                    print(f"Received: {line}")
+                    # print(f"Received: {line}")
+
                 # 正しいメッセージが含まれているか確認
                 welcome_message = "\n".join(lines)
                 if "KOMATSU Experiment" in welcome_message:
@@ -307,7 +296,6 @@ class AccelerometerGUI:
                                 self.update_channel_status(ch, channel_status[ch])
                                     
                     ser.write(b's')  # 's' を送信してデータ送信を開始
-                    self.milliseconds_start = int(time.time() * 1000)
                     return ser  # 有効なポートを開いた状態で返す
                 else:
                     ser.close()  # 無効な場合はポートを閉じる
@@ -320,99 +308,82 @@ class AccelerometerGUI:
         try:
             while self.is_running:
                 header = self.serial_port.read(1)
-                
-                # ヘッダーチェック ('*' で始まるか)
-                if header == b'*':
+                if(len(header) == 0):
+                    continue
+                if ord(header) != 127:  # ASCII code of DEL
+                    print('/', end='')  # 読み落としがあるか確認
+                    continue                
+                else:
+                    # for ch in range(1, 5):  # CH 1 から CH 4 まで処理
+                    #     if ch == self.active_port:
 
-                    for ch in range(1, 5):  # CH 1 から CH 4 まで処理
-                        if ch == self.active_port:
-                            # データを順次読み取る
-                            acc_data = self.serial_port.read(6)
-                            x_acc, y_acc, z_acc = struct.unpack('>hhh', acc_data)  # ビッグエンディアンでデコード
-                            x_acc = x_acc / ACC_SCALE  # スケーリング
-                            y_acc = y_acc / ACC_SCALE
-                            z_acc = z_acc / ACC_SCALE
+                    # データを順次読み取る
+                    acc_data = self.serial_port.read(6)
+                    x_acc, y_acc, z_acc = struct.unpack('>hhh', acc_data)  # ビッグエンディアンでデコード
 
-                            gyro_data = self.serial_port.read(6)
-                            x_gyro, y_gyro, z_gyro = struct.unpack('>hhh', gyro_data)
-                            x_gyro = x_gyro / GYRO_SCALE  # スケーリング
-                            y_gyro = y_gyro / GYRO_SCALE
-                            z_gyro = z_gyro / GYRO_SCALE
-                        else:
-                            # データを順次読み取る
-                            acc_data = self.serial_port.read(6)
-                            gyro_data = self.serial_port.read(6)
+                    gyro_data = self.serial_port.read(6)
+                    x_gyro, y_gyro, z_gyro = struct.unpack('>hhh', gyro_data)
+                                    
+                        # else:
+                        #     # データを順次読み取る
+                        #     acc_data = self.serial_port.read(6)
+                        #     gyro_data = self.serial_port.read(6)
 
                     # タイムスタンプを読み取る
-                    time_data = self.serial_port.read(1)
-                    timestamp = struct.unpack('>B', time_data)[0]  # 1バイトのタイムスタンプ
-                    milliseconds = int(time.time() * 1000)
-                    
+                    time_data = self.serial_port.read(3)
+                    milliseconds = int.from_bytes(time_data, byteorder='big', signed=False)
 
-                    # CR (0x0d) と LF (0x0a) を読み飛ばす
-                    self.serial_port.read(2)
+                    if 'x_acc' in locals():
+                        # データを保存
+                        self.data['x_acc'].append(x_acc)
+                        self.data['y_acc'].append(y_acc)
+                        self.data['z_acc'].append(z_acc)
+                        self.data['x_gyro'].append(x_gyro)
+                        self.data['y_gyro'].append(y_gyro)
+                        self.data['z_gyro'].append(z_gyro)
+                        self.data['time'].append(milliseconds)
 
-                    # データを保存
-                    self.data['x_acc'].append(x_acc)
-                    self.data['y_acc'].append(y_acc)
-                    self.data['z_acc'].append(z_acc)
-                    self.data['x_gyro'].append(x_gyro)
-                    self.data['y_gyro'].append(y_gyro)
-                    self.data['z_gyro'].append(z_gyro)
-                    self.data['time'].append((milliseconds - self.milliseconds_start)/1000.0)
-
-                    # データを一定数以上保持しないようにリミットを設定
-                    if len(self.data['x_acc']) > DATA_LENGTH:
-                        self.data['x_acc'].pop(0)
-                        self.data['y_acc'].pop(0)
-                        self.data['z_acc'].pop(0)
-                        self.data['x_gyro'].pop(0)
-                        self.data['y_gyro'].pop(0)
-                        self.data['z_gyro'].pop(0)
-                        self.data['time'].pop(0)
+                        # データを一定数以上保持しないようにリミットを設定
+                        if len(self.data['x_acc']) > DATA_LENGTH:
+                            self.stop_measurement()
                 
-                #読み落としがあるか確認        
-                #else:
-                    #print('/')
-
         except serial.SerialException as e:
             print(f"Error reading from serial port: {e}")
 
     def update_plot(self, frame):
-        # データ長をそろえるために、最小長のリストに基づいてデータを切り詰める
-        min_len = min(len(self.data['x_acc']), len(self.data['y_acc']), len(self.data['z_acc']), len(self.data['x_gyro']))
-        x_range = range(min_len)
-
-        # 加速度グラフのデータ設定
-        self.line_x_acc.set_data(x_range, self.data['x_acc'][:min_len])
-        self.line_y_acc.set_data(x_range, self.data['y_acc'][:min_len])
-        self.line_z_acc.set_data(x_range, self.data['z_acc'][:min_len])
-
-        # ジャイログラフのデータ設定
-        self.line_x_gyro.set_data(x_range, self.data['x_gyro'][:min_len])
-        self.line_y_gyro.set_data(x_range, self.data['y_gyro'][:min_len])
-        self.line_z_gyro.set_data(x_range, self.data['z_gyro'][:min_len])
-
-        # プロットのX軸範囲を更新
-        self.ax_acc.set_xlim(max(100, min_len) - 100, max(100, min_len))
-        self.ax_gyro.set_xlim(max(100, min_len) - 100, max(100, min_len))
-
-        # レコード長を表示
-        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", font=("MSゴシック", "16", "bold"))
-        # print(min_len)
-
-        # キャンバスの更新
+        min_len = len(self.data['x_acc'])
+        if min_len > 0:
+            x_range = range(min_len)
+            acc_data = [(self.data['x_acc'], self.line_x_acc), 
+                        (self.data['y_acc'], self.line_y_acc), 
+                        (self.data['z_acc'], self.line_z_acc)]
+            gyro_data = [(self.data['x_gyro'], self.line_x_gyro), 
+                         (self.data['y_gyro'], self.line_y_gyro), 
+                         (self.data['z_gyro'], self.line_z_gyro)]
+    
+            for data, line in acc_data:
+                line.set_data(x_range, [x / ACC_SCALE for x in data[:min_len]])
+    
+            for data, line in gyro_data:
+                line.set_data(x_range, [x / GYRO_SCALE for x in data[:min_len]])
+    
+        xlim_value = max(500, min_len)
+        self.ax_acc.set_xlim(xlim_value - 500, xlim_value)
+        self.ax_gyro.set_xlim(xlim_value - 500, xlim_value)
+    
+        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", font=("MSゴシック", "14", "bold"))
+    
         self.canvas.draw()
 
     def on_closing(self):
         """×ボタンが押された時の処理"""
         print("Closing thread...")
         self.is_running = False  # スレッドを停止するフラグを設定
-        time.sleep(0.7)          # スレッドが停止するのを待つ
+        time.sleep(0.2)          # スレッドが停止するのを待つ
         print("Closing COM port...")
         if self.serial_port and self.serial_port.is_open:
             self.serial_port.close()  # シリアルポートを閉じる
-            time.sleep(0.2)          # スレッドが停止するのを待つ
+            time.sleep(0.1)          # スレッドが停止するのを待つ
         print("Closing application...")
         self.root.quit()  # Tkinterのメインループを停止
         self.root.destroy()  # ウィンドウを閉じる
