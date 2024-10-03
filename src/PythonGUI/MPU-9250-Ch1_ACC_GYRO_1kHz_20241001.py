@@ -9,6 +9,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import threading
 import time
+import numpy as np
 
 # COMポートのスキャン範囲を設定
 START_COM_PORT = 2
@@ -139,7 +140,9 @@ class AccelerometerGUI:
         self.items2.bind("<<ComboboxSelected>>", self.update_gyro_scale)
 
         # グラフの初期設定
-        self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
+        #self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
+        # In your __init__ method, add another axis for the FFT
+        self.fig, (self.ax_acc, self.ax_gyro, self.ax_fft) = plt.subplots(3, 1, figsize=(8, 8))
 
         # 加速度グラフ
         self.line_x_acc, = self.ax_acc.plot([], [], label="X-acc", color='r')
@@ -161,6 +164,18 @@ class AccelerometerGUI:
         self.ax_gyro.set_xlabel("Time [sample]")
         self.ax_gyro.set_title("Gyroscope")
         self.ax_gyro.legend(loc='upper right')
+
+        # Add a line for the FFT plot with thinner line width
+        self.line_x_fft, = self.ax_fft.plot([], [], label="FFT of X-acc", color='r', linewidth=0.5)
+        self.line_y_fft, = self.ax_fft.plot([], [], label="FFT of Y-acc", color='g', linewidth=0.5)
+        self.line_z_fft, = self.ax_fft.plot([], [], label="FFT of Z-acc", color='b', linewidth=0.5)
+        self.ax_fft.set_xscale('log')
+        self.ax_fft.set_xlim(0, 500)  # Frequency range, you can adjust this based on your data
+        self.ax_fft.set_ylim(0,20)   # Magnitude range, adjust accordingly
+        self.ax_fft.set_xlabel("Frequency [Hz]")
+        self.ax_fft.set_ylabel("Magnitude")
+        self.ax_fft.set_title("Real-Time FFT of X-Acceleration")
+        self.ax_fft.legend(loc='upper left')
 
         # CanvasをTkinterウィンドウに埋め込む
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
@@ -410,6 +425,26 @@ class AccelerometerGUI:
             # Update gyroscope lines
             for data, line in gyro_data:
                 line.set_data(x_range, [x / GYRO_SCALE for x in data[:min_len]])
+
+            # Perform FFT on the accelerometer x-axis data
+            if len(self.data['x_acc']) >= 1024:  # Perform FFT on the last 256 samples
+                signal = self.data['x_acc'][-1024:]  # Get the last 256 samples
+                fft_result = np.fft.fft(signal)  # Perform FFT
+                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
+                # Update FFT plot (assuming you have a separate axis for FFT)
+                self.line_x_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
+
+                signal = self.data['y_acc'][-1024:]  # Get the last 256 samples
+                fft_result = np.fft.fft(signal)  # Perform FFT
+                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
+                # Update FFT plot (assuming you have a separate axis for FFT)
+                self.line_y_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
+
+                signal = self.data['z_acc'][-1024:]  # Get the last 256 samples
+                fft_result = np.fft.fft(signal)  # Perform FFT
+                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
+                # Update FFT plot (assuming you have a separate axis for FFT)
+                self.line_z_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
 
         # Keep a fixed time window for the x-axis
         if min_len > 0:
