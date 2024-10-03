@@ -105,38 +105,38 @@ class AccelerometerGUI:
 
         # チャネル状態を表示するラベル
         self.channel_status = {}
-        frame_tool_bar = tk.Frame(self.root, borderwidth = 10)
+        frame_tool_bar = tk.Frame(self.root, borderwidth = 0)
         for i in range(1, 5):
-            label = tk.Label(frame_tool_bar, text=f"  CH {i}: Unknown  ", bg="gray", height = 2, font=("MSゴシック", "12", "bold"))
+            label = tk.Label(frame_tool_bar, text=f"  CH {i}: Unknown  ", bg="gray", height = 0, font=("MSゴシック", "10", "bold"))
             label.pack(side=tk.LEFT)
             self.channel_status[i] = label
             
-        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", font=("MSゴシック", "14", "bold"))
+        label = tk.Label(frame_tool_bar, text=f"  Recorded Length :       0  ", bg="gray", font=("MSゴシック", "10", "bold"))
         label.pack(side=tk.LEFT)
         self.channel_status[5] = label
-        frame_tool_bar.pack(fill = tk.X)
 
         # Acc/Gryo Setup
         # 設定項目をつくる
-        frame_scale = tk.Frame(self.root, borderwidth=10)
         
         # 項目1
-        items1 = ttk.Combobox(frame_scale, state='readonly', width=20)
-        items1['values'] = ('Acc scale 2G', 'Acc scale 4G', 'Acc scale 8G', 'Acc scale 16G')
-        items1.current(3)  # デフォルト値を設定
-        items1.pack(side=tk.LEFT)
+        style = ttk.Style()
+        style.configure("TCombobox", font=("MSゴシック", "14", "bold"), padding=2)
+
+        self.items1 = ttk.Combobox(frame_tool_bar, state='readonly', width=20, style="TCombobox")
+        self.items1['values'] = ('Acc scale 2G', 'Acc scale 4G', 'Acc scale 8G', 'Acc scale 16G')
+        self.items1.current(1)  # デフォルト値を設定
+        self.items1.pack(side=tk.LEFT)
         
         # 項目2
-        items2 = ttk.Combobox(frame_scale, state='readonly', width=20)
-        items2['values'] = ('Gyro scale 250DPS', 'Gyro scale 500DPS', 'Gyro scale 1000DPS', 'Gyro scale 2000DPS')
-        items2.current(3)  # デフォルト値を設定
-        items2.pack(side=tk.LEFT)
-        
-        frame_scale.pack(fill=tk.X)
+        self.items2 = ttk.Combobox(frame_tool_bar, state='readonly', width=20)
+        self.items2['values'] = ('Gyro scale 250DPS', 'Gyro scale 500DPS', 'Gyro scale 1000DPS', 'Gyro scale 2000DPS')
+        self.items2.current(1)  # デフォルト値を設定
+        self.items2.pack(side=tk.LEFT)        
+        frame_tool_bar.pack(fill=tk.X)
         
         # スケール変更時のイベントハンドラを設定
-        items1.bind("<<ComboboxSelected>>", self.update_acc_scale)
-        items2.bind("<<ComboboxSelected>>", self.update_gyro_scale)
+        self.items1.bind("<<ComboboxSelected>>", self.update_acc_scale)
+        self.items2.bind("<<ComboboxSelected>>", self.update_gyro_scale)
 
         # グラフの初期設定
         self.fig, (self.ax_acc, self.ax_gyro) = plt.subplots(2, 1, figsize=(10, 8))
@@ -167,17 +167,17 @@ class AccelerometerGUI:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
 
         # CSV保存ボタン
-        self.save_button = tk.Button(self.root, text="  Save to CSV [S]  ", font=("MSゴシック", "14", "bold"), command=self.save_to_csv)
+        self.save_button = tk.Button(self.root, text="  Save to CSV [S]  ", font=("MSゴシック", "10", "bold"), command=self.save_to_csv)
         self.save_button.pack(side=tk.LEFT)
 
         # データ計測開始・停止ボタン
-        self.start_button = tk.Button(self.root, text="  Start Measurement [s]  ", font=("MSゴシック", "14", "bold"), command=self.start_measurement)
+        self.start_button = tk.Button(self.root, text="  Start Measurement [s]  ", font=("MSゴシック", "10", "bold"), command=self.start_measurement)
         self.start_button.pack(side=tk.LEFT)
-        self.stop_button = tk.Button(self.root, text="  Stop Measurement [r] ", font=("MSゴシック", "14", "bold"), command=self.stop_measurement)
+        self.stop_button = tk.Button(self.root, text="  Stop Measurement [r] ", font=("MSゴシック", "10", "bold"), command=self.stop_measurement)
         self.stop_button.pack(side=tk.LEFT)
 
         # クリアボタン
-        self.save_button = tk.Button(self.root, text="  Clear Data [c]  ", font=("MSゴシック", "14", "bold"), command=self.stop_and_clear)
+        self.save_button = tk.Button(self.root, text="  Clear Data [c]  ", font=("MSゴシック", "10", "bold"), command=self.stop_and_clear)
         self.save_button.pack(side=tk.LEFT)
 
         # ウィンドウ終了イベントを設定
@@ -195,6 +195,12 @@ class AccelerometerGUI:
                 print("No valid COM port found.")
                 return
         
+        # デフォルトのスケールを設定
+        self.items1.set("Acc scale 16G")
+        self.items1.event_generate("<<ComboboxSelected>>")
+        self.items2.set("Gyro scale 2000DPS")
+        self.items2.event_generate("<<ComboboxSelected>>")
+
         # シリアルポートからデータを読み込むスレッドを開始
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.start()
@@ -384,29 +390,42 @@ class AccelerometerGUI:
             print(f"Error reading from serial port: {e}")
 
     def update_plot(self, frame):
-        min_len = len(self.data['x_acc'])
+        min_len = len(self.data['time'])  # Use the length of the time data for synchronization
         if min_len > 0:
-            x_range = range(min_len)
+            # Get the time range for the x-axis (in real time)
+            x_range = [t / 1000 for t in self.data['time'][:min_len]]    # This assumes self.data['time'] contains actual timestamps in ms or s
+
+            # Prepare accelerometer and gyroscope data
             acc_data = [(self.data['x_acc'], self.line_x_acc), 
                         (self.data['y_acc'], self.line_y_acc), 
                         (self.data['z_acc'], self.line_z_acc)]
             gyro_data = [(self.data['x_gyro'], self.line_x_gyro), 
-                         (self.data['y_gyro'], self.line_y_gyro), 
-                         (self.data['z_gyro'], self.line_z_gyro)]
-    
+                        (self.data['y_gyro'], self.line_y_gyro), 
+                        (self.data['z_gyro'], self.line_z_gyro)]
+
+            # Update accelerometer lines
             for data, line in acc_data:
                 line.set_data(x_range, [x / ACC_SCALE for x in data[:min_len]])
-    
+
+            # Update gyroscope lines
             for data, line in gyro_data:
                 line.set_data(x_range, [x / GYRO_SCALE for x in data[:min_len]])
-    
-        xlim_value = max(500, min_len)
-        self.ax_acc.set_xlim(xlim_value - 500, xlim_value)
-        self.ax_gyro.set_xlim(xlim_value - 500, xlim_value)
-    
-        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", bg="gray", font=("MSゴシック", "14", "bold"))
+
+        # Keep a fixed time window for the x-axis
+        if min_len > 0:
+            end_time = x_range[-1]
+            start_time = max(end_time - 0.5, x_range[0])  # Show the last 500 milliseconds, adjust as necessary
+            self.ax_acc.set_xlim(start_time, end_time)
+            self.ax_gyro.set_xlim(start_time, end_time)
+
+        # Add x-axis labels
+        self.ax_acc.set_xlabel("Time [s]")  # X-axis label for accelerometer data
+        self.ax_gyro.set_xlabel("Time [s]")  # X-axis label for gyroscope data
+        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", fg="white", bg="black", font=("MSゴシック", "10", "bold"))
     
         self.canvas.draw()
+        plt.subplots_adjust(hspace=0.5)  # Automatically adjust layout
+
 
     def on_closing(self):
         """×ボタンが押された時の処理"""
