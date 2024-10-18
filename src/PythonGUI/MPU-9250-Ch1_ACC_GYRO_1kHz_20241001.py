@@ -150,6 +150,7 @@ class AccelerometerGUI:
         self.line_z_acc, = self.ax_acc.plot([], [], label="Z-acc", color='b')
         self.ax_acc.set_xlim(0, 500)
         self.ax_acc.set_ylim(-20, 20)
+        self.ax_acc.set_xlabel("Time [s]")  # X-axis label for accelerometer data
         self.ax_acc.set_ylabel("Acceleration [G]")
         self.ax_acc.set_title("Acceleration")
         self.ax_acc.legend(loc='upper right')
@@ -161,7 +162,7 @@ class AccelerometerGUI:
         self.ax_gyro.set_xlim(0, 500)
         self.ax_gyro.set_ylim(-2200, 2200)
         self.ax_gyro.set_ylabel("Gyro [Degree per second]")
-        self.ax_gyro.set_xlabel("Time [sample]")
+        self.ax_gyro.set_xlabel("Time [s]")  # X-axis label for gyroscope data
         self.ax_gyro.set_title("Gyroscope")
         self.ax_gyro.legend(loc='upper right')
 
@@ -170,8 +171,8 @@ class AccelerometerGUI:
         self.line_y_fft, = self.ax_fft.plot([], [], label="FFT of Y-acc", color='g', linewidth=0.5)
         self.line_z_fft, = self.ax_fft.plot([], [], label="FFT of Z-acc", color='b', linewidth=0.5)
         self.ax_fft.set_xscale('log')
-        self.ax_fft.set_xlim(0, 500)  # Frequency range, you can adjust this based on your data
-        self.ax_fft.set_ylim(0,20)   # Magnitude range, adjust accordingly
+        self.ax_fft.set_xlim(1, 500)  # Frequency range, you can adjust this based on your data
+        self.ax_fft.set_ylim(0, 20)   # Magnitude range, adjust accordingly
         self.ax_fft.set_xlabel("Frequency [Hz]")
         self.ax_fft.set_ylabel("Magnitude")
         self.ax_fft.set_title("Real-Time FFT of X-Acceleration")
@@ -180,6 +181,10 @@ class AccelerometerGUI:
         # CanvasをTkinterウィンドウに埋め込む
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+
+        # Draw the canvas and adjust layout
+        self.canvas.draw()
+        plt.subplots_adjust(hspace=0.5)  # Automatically adjust layout
 
         # CSV保存ボタン
         self.save_button = tk.Button(self.root, text="  Save to CSV [S]  ", font=("MSゴシック", "10", "bold"), command=self.save_to_csv)
@@ -221,7 +226,7 @@ class AccelerometerGUI:
         self.serial_thread.start()
 
         # アニメーションの設定 (グラフの描画は間引いて行う)
-        self.ani = FuncAnimation(self.fig, self.update_plot, interval=100)
+        self.ani = FuncAnimation(self.fig, self.update_plot, interval=16.6)
       
              
     # シリアルポートから読み込んだデータを保存するリスト
@@ -251,7 +256,7 @@ class AccelerometerGUI:
             self.stop_measurement()
             self.save_to_csv()
 
-        if key == "Escape":
+        if key == "Escape" or key == "q":
             self.stop_measurement()
             self.on_closing()
 
@@ -404,11 +409,15 @@ class AccelerometerGUI:
         except serial.SerialException as e:
             print(f"Error reading from serial port: {e}")
 
+
+
     def update_plot(self, frame):
         min_len = len(self.data['time'])  # Use the length of the time data for synchronization
+        start_index = max(0, min_len - 500)  # Show the last 500 samples, adjust as necessary
+
         if min_len > 0:
             # Get the time range for the x-axis (in real time)
-            x_range = [t / 1000 for t in self.data['time'][:min_len]]    # This assumes self.data['time'] contains actual timestamps in ms or s
+            x_range = np.array(self.data['time'][start_index:min_len]) / 1000  # Convert to seconds
 
             # Prepare accelerometer and gyroscope data
             acc_data = [(self.data['x_acc'], self.line_x_acc), 
@@ -418,48 +427,28 @@ class AccelerometerGUI:
                         (self.data['y_gyro'], self.line_y_gyro), 
                         (self.data['z_gyro'], self.line_z_gyro)]
 
-            # Update accelerometer lines
+            # Update accelerometer and gyroscope lines
             for data, line in acc_data:
-                line.set_data(x_range, [x / ACC_SCALE for x in data[:min_len]])
-
-            # Update gyroscope lines
+                line.set_data(x_range, np.array(data[start_index:min_len]) / ACC_SCALE)
             for data, line in gyro_data:
-                line.set_data(x_range, [x / GYRO_SCALE for x in data[:min_len]])
+                line.set_data(x_range, np.array(data[start_index:min_len]) / GYRO_SCALE)
 
-            # Perform FFT on the accelerometer x-axis data
-            if len(self.data['x_acc']) >= 1024:  # Perform FFT on the last 256 samples
-                signal = self.data['x_acc'][-1024:]  # Get the last 256 samples
-                fft_result = np.fft.fft(signal)  # Perform FFT
-                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
-                # Update FFT plot (assuming you have a separate axis for FFT)
-                self.line_x_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
+            # Perform FFT on the accelerometer data
+            if len(self.data['x_acc']) >= 1024:
+                for axis, line_fft in zip(['x_acc', 'y_acc', 'z_acc'], [self.line_x_fft, self.line_y_fft, self.line_z_fft]):
+                    signal = np.array(self.data[axis][-1024:])  # Get the last 1024 samples
+                    fft_result = np.fft.fft(signal)  # Perform FFT
+                    freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
+                    line_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
 
-                signal = self.data['y_acc'][-1024:]  # Get the last 256 samples
-                fft_result = np.fft.fft(signal)  # Perform FFT
-                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
-                # Update FFT plot (assuming you have a separate axis for FFT)
-                self.line_y_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
-
-                signal = self.data['z_acc'][-1024:]  # Get the last 256 samples
-                fft_result = np.fft.fft(signal)  # Perform FFT
-                freqs = np.fft.fftfreq(len(fft_result), d=(x_range[1] - x_range[0]))  # Compute frequency bins
-                # Update FFT plot (assuming you have a separate axis for FFT)
-                self.line_z_fft.set_data(freqs[:512], np.log(np.abs(fft_result[:512])))  # Plot only the positive frequencies
-
-        # Keep a fixed time window for the x-axis
-        if min_len > 0:
+            # Keep a fixed time window for the x-axis
             end_time = x_range[-1]
             start_time = max(end_time - 0.5, x_range[0])  # Show the last 500 milliseconds, adjust as necessary
             self.ax_acc.set_xlim(start_time, end_time)
             self.ax_gyro.set_xlim(start_time, end_time)
 
-        # Add x-axis labels
-        self.ax_acc.set_xlabel("Time [s]")  # X-axis label for accelerometer data
-        self.ax_gyro.set_xlabel("Time [s]")  # X-axis label for gyroscope data
-        self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", fg="white", bg="black", font=("MSゴシック", "10", "bold"))
-    
-        self.canvas.draw()
-        plt.subplots_adjust(hspace=0.5)  # Automatically adjust layout
+            # Add x-axis labels
+            self.channel_status[5].config(text=f"  Recorded Length :  {min_len} ", fg="white", bg="black", font=("MSゴシック", "10", "bold"))
 
 
     def on_closing(self):
