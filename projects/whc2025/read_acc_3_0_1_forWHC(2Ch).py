@@ -62,7 +62,9 @@ ser = serial.Serial("COM3", 921600, timeout=1)
 if ser.is_open:
     print("Serial Connection OK")
     print("Serial Port: ",ser.name)
-    print("Baudrate: ",ser.baudrate) 
+    print("Baudrate: ",ser.baudrate)
+    ser.read(9999) # read all data in buffer
+    print("Buffer Clear")
 else:
     print("PORT ERROR") 
     ser.close() 
@@ -123,64 +125,79 @@ def readByte():
     tmp_time = 0
 
     while True:
-            
+
+        # キー待ち受け
         if msvcrt.kbhit():
-            if( msvcrt.getwch() == "q"):
-                print("over") 
+            if msvcrt.getwch() == "q":
+                print("Stopped by user.")
                 ser.write(b"r")
                 time.sleep(0.04)
                 break
-            
+
         res = ser.read()
+        print(f"{res.hex()} ", end="")
 
-        if state == 0 and res == b'\x7f':
-            state = 1
-            store = []
-            res = 0
-            print("state = 1")
+        if res == b'':  # タイムアウト時
+            print("Timeout: No data received")
+            continue
+        
+        if state == 0:
+            if res == b'\x7f': # ヘッダはDELが2つ連続するが1つ目のDELを見つけた
+                state = 1
+                continue
+        
+        if state == 1:
+            if res != b'\x7f': # ヘッダはDELが2つ連続するはずだがしない
+                # 異常：ヘッダの条件を満たさなかった
+                fail_cnt_byte += 1
+                state = 0
+                # print("Header error")
+                continue
 
-        elif state == 1 and res == b'\x7f':
-            fail_cnt_byte += 1
-            state = 0
-            store = []
-            print("fail_cnt_byte += 1   " + str(fail_cnt_byte))
+            else:
+                state = 2
+                print("found header")
+                # 直後の行を実行するので continue しない！
 
-        else:
+        if state == 2:
+            store = ser.read(27) # ← ヘッダを除いて残り27バイト受信でOK
+            print(" ".join(f"{byte:02x}" for byte in store))
+            # print(f"Received {len(store)} bytes")
+            try:
+                # タイムスタンプ（末尾3バイト）
+                timestamp_bytes = b''.join(bytes([b]) for b in store[-3:])
+                timestamp = int.from_bytes(timestamp_bytes, byteorder='big')
+                print(f"Timestamp: {timestamp}")
+                if smpl_cnt < len(buf):
+                    buf[smpl_cnt][0] = smpl_cnt
+                    buf[smpl_cnt][1] = tmp_time
+                    buf_f[smpl_cnt][0] = smpl_cnt
+                    buf_f[smpl_cnt][1] = tmp_time
 
-            store.append(res)
+                    for i in range(0, 2, 2):
+                        val = struct.unpack('>h', bytes(store[i:i+2]))[0]
+                        idx = i // 2
+                        buf[smpl_cnt][idx + 2] = val
+                        if idx % 6 >= 3:
+                            buf_f[smpl_cnt][idx + 2] = val * MPU9250G_2000dps
+                        else:
+                            buf_f[smpl_cnt][idx + 2] = val * MPU9250A_16g
 
-            if len(store) == 51:  # ← 52バイトに変更
-
-                # タイムスタンプ（3byte Big Endian）
-                timestamp_bytes = b''.join(store[-3:])
-                add_time = int.from_bytes(timestamp_bytes, byteorder='big')
-                if smpl_cnt == 0:
-                    tmp_time = 0
+                    smpl_cnt += 1
+                    # print("Data parsed successfully")
                 else:
-                    tmp_time = add_time
+                    print("Buffer full. Skipping.")
 
-                buf[smpl_cnt][0] = smpl_cnt
-                buf[smpl_cnt][1] = tmp_time
-                buf_f[smpl_cnt][0] = smpl_cnt
-                buf_f[smpl_cnt][1] = tmp_time
-
-                # センサデータ24バイト（12個のshort整数）
-                for i in range(0, 24, 2):
-                    val = struct.unpack('>h', b''.join(store[i:i+2]))[0]
-                    idx = i // 2
-                    buf[smpl_cnt][idx + 2] = val
-                    if idx % 6 >= 3:  # 角速度
-                        buf_f[smpl_cnt][idx + 2] = val * MPU9250G_500dps
-                    else:  # 加速度
-                        buf_f[smpl_cnt][idx + 2] = val * MPU9250A_4g
-
-                smpl_cnt += 1
+            except Exception as e:
+                print(f"\nData parse error at {smpl_cnt}: {e}")
+                fail_cnt_head += 1
+            finally:
                 store = []
                 state = 0
+                
 
-                print("state = 0")
-                if smpl_cnt >= 1000:
-                    break
+            if smpl_cnt >= 1000:
+                break
 
 
 # Start
