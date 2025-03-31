@@ -166,13 +166,16 @@ def readByte():
             try:
                 # タイムスタンプ（末尾3バイト）
                 timestamp_bytes = b''.join(bytes([b]) for b in store[-3:])
+                print("TIMESTAMP " + " ".join(f"{byte:02x}" for byte in timestamp_bytes))
+                # タイムスタンプを整数に変換
                 timestamp = int.from_bytes(timestamp_bytes, byteorder='big')
                 print(f"Timestamp: {timestamp}")
+
                 if smpl_cnt < len(buf):
                     buf[smpl_cnt][0] = smpl_cnt
-                    buf[smpl_cnt][1] = tmp_time
+                    buf[smpl_cnt][1] = timestamp
                     buf_f[smpl_cnt][0] = smpl_cnt
-                    buf_f[smpl_cnt][1] = tmp_time
+                    buf_f[smpl_cnt][1] = timestamp
 
                     for i in range(0, 24, 2):
                         val = struct.unpack('>h', bytes(store[i:i+2]))[0]
