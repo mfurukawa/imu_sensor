@@ -13,6 +13,7 @@ import csv
 import time 
 import datetime 
 import struct 
+import msvcrt
 
 
 # Variable to get real value 
@@ -32,13 +33,13 @@ MPU9250T_85degC  = 0.002995177763 # 0.002995177763 degC/LSB
 Magnetometer_Sensitivity_Scale_Factor = 0.15
 
 # number of axis 
-numVariable = 24 # 4ch * 6acc 
+numVariable = 12 # 2ch * 6acc 
 
 # Maximum time for measure
-minuteLength = 25 
+minuteLength = 5 
 
 # sampling rate 
-smplHz = 500 
+smplHz = 1000 
 
 # Variable to count number of sampling 
 smpl_cnt = 0
@@ -54,12 +55,14 @@ buf = [[0 for i in range(numVariable + 2)] for j in range(smplHz*60*minuteLength
 buf_f = [[0 for i in range(numVariable + 2)] for j in range(smplHz*60*minuteLength)]
 
 # define serial port 
-ser = serial.Serial("COM3",921600,timeout=1) 
+ser = serial.Serial("COM3", 921600, timeout=1) 
 
 
 # Check serial connection 
 if ser.is_open:
-    print("Start Serial Connection") 
+    print("Serial Connection OK")
+    print("Serial Port: ",ser.name)
+    print("Baudrate: ",ser.baudrate) 
 else:
     print("PORT ERROR") 
     ser.close() 
@@ -85,7 +88,7 @@ def writeCSV():
     day = dt_now.day 
     hour = dt_now.hour 
     minute = dt_now.minute 
-    t = str(year)+str(month)+str(day)+str(hour)+str(minute)
+    t = str(year) + f"{month:02}" + f"{day:02}" + "_" + f"{hour:02}" + f"{minute:02}"
     title_int = "acc_data"+str(t)+"_int"+".csv"
     title_float="acc_data"+str(t)+"_float"+".csv" 
     FILE_int = open(title_int,"w",newline="") 
@@ -107,104 +110,92 @@ def writeCSV():
        
 # Function to Measure 
 def readByte():
-    global ser 
-    global smpl_cnt 
-    global buf 
-    global buf_f  
-    global xl 
-    global yl 
-    global fail_cnt_byte 
-    global fail_cnt_head 
+    global ser, smpl_cnt, buf, buf_f
+    global fail_cnt_byte, fail_cnt_head
 
-    ser.write(b"r") 
+    ser.write(b"r")
     time.sleep(0.01)
-    ser.write(b"s") 
-    time.sleep(0.01) 
+    ser.write(b"s")
+    time.sleep(0.01)
 
     state = 0
     store = []
-    while(1):
+    tmp_time = 0
+
+    while True:
+            
+        if msvcrt.kbhit():
+            if( msvcrt.getwch() == "q"):
+                print("over") 
+                ser.write(b"r")
+                time.sleep(0.04)
+                break
+            
         res = ser.read()
 
-        if state == 0 and res == b'\x7f':  # DEL code (b'\x7f') as a start byte
-            state = 1 
+        if state == 0 and res == b'\x7f':
+            state = 1
             store = []
-        elif state == 1:
-            store.append(res) 
-                
-            if len(store) == 50: # 2Channels * 6 axis * 2bytes per axis + 
+            res = 0
+            print("state = 1")
 
-                # check header 
-                if store[0]==b'\x7f':
-                    del store[0]
-                else:
-                    print("header error") 
-                    #time.sleep(2)
-                    fail_cnt_head += 1 
-                    state = 0
-                    store = []
-                    continue 
+        elif state == 1 and res == b'\x7f':
+            fail_cnt_byte += 1
+            state = 0
+            store = []
+            print("fail_cnt_byte += 1   " + str(fail_cnt_byte))
 
-        
-                #add time stamp
-                if smpl_cnt==0:
-                    #start_time = int.from_bytes(res[-1],"big")
-                    start_time = struct.unpack("b",store[-1])[0]
-                    #start_time = store[-1]
-                    #print(start_time)
+        else:
+
+            store.append(res)
+
+            if len(store) == 51:  # ← 52バイトに変更
+
+                # タイムスタンプ（3byte Big Endian）
+                timestamp_bytes = b''.join(store[-3:])
+                add_time = int.from_bytes(timestamp_bytes, byteorder='big')
+                if smpl_cnt == 0:
                     tmp_time = 0
                 else:
-                    #now_time = int.from_bytes(res[-1],"big") 
-                    add_time = struct.unpack("b",store[-1])[0]
-                    #add_time = store[-1]
-                    tmp_time += add_time
-                buf[smpl_cnt][1] = tmp_time
+                    tmp_time = add_time
+
                 buf[smpl_cnt][0] = smpl_cnt
-                buf_f[smpl_cnt][1] = tmp_time
+                buf[smpl_cnt][1] = tmp_time
                 buf_f[smpl_cnt][0] = smpl_cnt
+                buf_f[smpl_cnt][1] = tmp_time
 
-                # store data 
-                for i in range(0,48,2):
-                    res2 = store[i:i+2] 
-                    tup = struct.unpack('>h', b''.join(res2)) 
-                    val = tup[0]
-                    num = i%12 
-                    ch = i//12 
-                    buf[smpl_cnt][6*ch + num//2 + 2]=val 
-                    if (num//2)>=3:
-                        buf_f[smpl_cnt][6*ch + num//2 + 2]=val * MPU9250G_500dps
-                    else:
-                        buf_f[smpl_cnt][6*ch + num//2 + 2]=val * MPU9250A_4g
+                # センサデータ24バイト（12個のshort整数）
+                for i in range(0, 24, 2):
+                    val = struct.unpack('>h', b''.join(store[i:i+2]))[0]
+                    idx = i // 2
+                    buf[smpl_cnt][idx + 2] = val
+                    if idx % 6 >= 3:  # 角速度
+                        buf_f[smpl_cnt][idx + 2] = val * MPU9250G_500dps
+                    else:  # 加速度
+                        buf_f[smpl_cnt][idx + 2] = val * MPU9250A_4g
 
-                """           
-                print (
-                    "{:+.3f}".format(buf_f[smpl_cnt][2]) ,      "{:+.3f}".format(buf_f[smpl_cnt][3]) ,      "{:+.3f}".format(buf_f[smpl_cnt][4]) , 
-                    "{:+.3f}".format(buf_f[smpl_cnt][5]) ,  "{:+.3f}".format(buf_f[smpl_cnt][6]) ,  "{:+.3f}".format(buf_f[smpl_cnt][7]) ,'\t',
-                    
-                    "{:+.3f}".format(buf_f[smpl_cnt][8]) ,      "{:+.3f}".format(buf_f[smpl_cnt][9]) ,      "{:+.3f}".format(buf_f[smpl_cnt][10]) , 
-                    "{:+.3f}".format(buf_f[smpl_cnt][11]) ,  "{:+.3f}".format(buf_f[smpl_cnt][12]) ,  "{:+.3f}".format(buf_f[smpl_cnt][13]) , '\t',
-                    
-                    "{:+.3f}".format(buf_f[smpl_cnt][14]) ,      "{:+.3f}".format(buf_f[smpl_cnt][15]) ,      "{:+.3f}".format(buf_f[smpl_cnt][16]) , 
-                    "{:+.3f}".format(buf_f[smpl_cnt][17]) ,  "{:+.3f}".format(buf_f[smpl_cnt][18]) ,  "{:+.3f}".format(buf_f[smpl_cnt][19]) , '\t',
-                    
-                    "{:+.3f}".format(buf_f[smpl_cnt][20]) ,      "{:+.3f}".format(buf_f[smpl_cnt][21]) ,      "{:+.3f}".format(buf_f[smpl_cnt][22]) , 
-                    "{:+.3f}".format(buf_f[smpl_cnt][23]) ,  "{:+.3f}".format(buf_f[smpl_cnt][24]) ,  "{:+.3f}".format(buf_f[smpl_cnt][25]) ) 
-                """
-                
                 smpl_cnt += 1
                 store = []
                 state = 0
 
-            if smpl_cnt>=10000:
-                break 
+                print("state = 0")
+                if smpl_cnt >= 1000:
+                    break
+
 
 # Start
-print("ready? --> press s key") 
+print("press [s] key to start") 
+print("press [q] key to quit (stop while measure)")
+print("ready? --> ")
+
 while(1):
-    ready_s = input() 
+    if msvcrt.kbhit():
+        ready_s = msvcrt.getwch()
+    else:
+        ready_s = ""
     if ready_s == "s":
         break 
-    if ready_s == "r":
+    if ready_s == "q":
         print("over") 
         ser.close()
         exit() 
