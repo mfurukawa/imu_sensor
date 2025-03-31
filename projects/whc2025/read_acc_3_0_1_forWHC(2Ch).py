@@ -73,7 +73,12 @@ def writeCSV():
     global buf_f 
     ser.write(b'r') 
     print("Start Create CSV File") 
-    head = ["sample_cc","ms","ACC_X1","ACC_Y1","ACC_Z1","GYRO_X1","GYRO_Y1","GYRO_Z1","ACC_X2","ACC_Y2","ACC_Z2","GYRO_X2","GYRO_Y2","GYRO_Z2","ACC_X3","ACC_Y3","ACC_Z3","GYRO_X3","GYRO_Y3","GYRO_Z3","ACC_X4","ACC_Y4","ACC_Z4","GYRO_X4","GYRO_Y4","GYRO_Z4"]
+    head = ["sample_cc","ms",
+            # "ACC_X1","ACC_Y1","ACC_Z1","GYRO_X1","GYRO_Y1","GYRO_Z1",
+            "ACC_X2","ACC_Y2","ACC_Z2","GYRO_X2","GYRO_Y2","GYRO_Z2",
+            "ACC_X3","ACC_Y3","ACC_Z3","GYRO_X3","GYRO_Y3","GYRO_Z3"
+            # ,"ACC_X4","ACC_Y4","ACC_Z4","GYRO_X4","GYRO_Y4","GYRO_Z4"
+            ]
     dt_now = datetime.datetime.now() 
     year = dt_now.year 
     month = dt_now.month 
@@ -82,12 +87,12 @@ def writeCSV():
     minute = dt_now.minute 
     t = str(year)+str(month)+str(day)+str(hour)+str(minute)
     title_int = "acc_data"+str(t)+"_int"+".csv"
-    FILE_int = open(title_int,"w",newline="") 
     title_float="acc_data"+str(t)+"_float"+".csv" 
+    FILE_int = open(title_int,"w",newline="") 
     FILE_float = open(title_float,"w",newline="")    
     wi = csv.writer(FILE_int)
-    wi.writerow(head)
     wf = csv.writer(FILE_float) 
+    wi.writerow(head)
     wf.writerow(head) 
     for i in range(smpl_cnt):
         wi.writerow(buf[i]) 
@@ -121,26 +126,19 @@ def readByte():
     while(1):
         res = ser.read()
 
-        if state == 0 and res == b'\r':
-            res=ser.read() 
-            if res == b'\n':
-                state = 1 
-                store = []
-            else:
-                #print("End byte set error")
-                fail_cnt_byte += 1 
-                #time.sleep(2)
-        
+        if state == 0 and res == b'\x7f':  # DEL code (b'\x7f') as a start byte
+            state = 1 
+            store = []
         elif state == 1:
             store.append(res) 
                 
-            if len(store)==50:
+            if len(store) == 50: # 2Channels * 6 axis * 2bytes per axis + 
 
                 # check header 
-                if store[0]==b'*':
+                if store[0]==b'\x7f':
                     del store[0]
                 else:
-                    #print("header error") 
+                    print("header error") 
                     #time.sleep(2)
                     fail_cnt_head += 1 
                     state = 0
@@ -161,8 +159,8 @@ def readByte():
                     #add_time = store[-1]
                     tmp_time += add_time
                 buf[smpl_cnt][1] = tmp_time
-                buf_f[smpl_cnt][1] = tmp_time
                 buf[smpl_cnt][0] = smpl_cnt
+                buf_f[smpl_cnt][1] = tmp_time
                 buf_f[smpl_cnt][0] = smpl_cnt
 
                 # store data 
