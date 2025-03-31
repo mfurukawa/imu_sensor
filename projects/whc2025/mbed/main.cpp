@@ -128,6 +128,7 @@ void eventFunc(void)
 
     // set header 
     putc(127, stdout); // DEL in ascii 
+    putc(127, stdout); // DEL in ascii 
 
     // Ch2(imu[1]) on PCB *spi1*
     // Ch3(imu[2]) on PCB *spi2*
