@@ -135,7 +135,7 @@ def readByte():
                 break
 
         res = ser.read()
-        print(f"{res.hex()} ", end="")
+        # print(f"{res.hex()} ", end="")
 
         if res == b'':  # タイムアウト時
             print("Timeout: No data received")
@@ -156,7 +156,7 @@ def readByte():
 
             else:
                 state = 2
-                print("found header")
+                # print("found header")
                 # 直後の行を実行するので continue しない！
 
         if state == 2:
@@ -174,7 +174,7 @@ def readByte():
                     buf_f[smpl_cnt][0] = smpl_cnt
                     buf_f[smpl_cnt][1] = tmp_time
 
-                    for i in range(0, 2, 2):
+                    for i in range(0, 24, 2):
                         val = struct.unpack('>h', bytes(store[i:i+2]))[0]
                         idx = i // 2
                         buf[smpl_cnt][idx + 2] = val
