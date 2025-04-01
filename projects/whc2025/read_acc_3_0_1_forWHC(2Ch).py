@@ -1,9 +1,13 @@
 # from https://github.com/mfurukawa/imu_sensor/tree/master/src/Python 
-# March 31, 2025 by Masahiro Furukawa, furukawa.masahiro.ist@osaka-u.ac.jp
+AUTHOR  = "Masahiro Furukawa"
+DATE    = "March 31, 2025"
+EMAIL   = "furukawa.masahiro.ist@osaka-u.ac.jp"
+MESSAGE = "IMU sensor MPU9250 (3-axis accelerometer, gyroscope) Logger"
 # September 03, 2020 by Yuto Nakayachi 
 
+DESCRIPTION1 = "This program is for reading data from the IMU sensor MPU9250 (3-axis accelerometer, gyroscope, and magnetometer)"
+DESCRIPTION2 = "and saving the data to a CSV file."
 
-from __future__ import unicode_literals ,print_function
 import serial 
 from time import sleep 
 import numpy as np 
@@ -14,7 +18,6 @@ import time
 import datetime 
 import struct 
 import msvcrt
-
 
 # Variable to get real value 
 MPU9250A_2g  =     0.000061035156 # 0.000061035156 g/LSB
@@ -36,10 +39,13 @@ Magnetometer_Sensitivity_Scale_Factor = 0.15
 numVariable = 12 # 2ch * 6acc 
 
 # Maximum time for measure
-minuteLength = 5 
+minuteLength = 1 
 
 # sampling rate 
 smplHz = 1000 
+
+# Maximum number of sampling
+maxSmpl = smplHz*60*minuteLength
 
 # Variable to count number of sampling 
 smpl_cnt = 0
@@ -49,22 +55,52 @@ fail_cnt_byte = 0
 fail_cnt_head = 0
 
 # Array to store data
-buf = [[0 for i in range(numVariable + 2)] for j in range(smplHz*60*minuteLength)] 
+buf = [[0 for i in range(numVariable + 2)] for j in range(maxSmpl)] 
 
 # Array to store real value 
-buf_f = [[0 for i in range(numVariable + 2)] for j in range(smplHz*60*minuteLength)]
+buf_f = [[0 for i in range(numVariable + 2)] for j in range(maxSmpl)]
 
 # define serial port 
 ser = serial.Serial("COM3", 921600, timeout=1) 
 
+# Display copyright information
+print("-" * 60)
+print(f"{MESSAGE}")
+print("-" * 60)
+print(f"{DATE}")
+print(f"{AUTHOR}")
+print(f"{EMAIL}")
+print()
+
+print(f"{DESCRIPTION1}")
+print(f"{DESCRIPTION2}")
+print("-" * 60)
 
 # Check serial connection 
 if ser.is_open:
-    print("Serial Connection OK")
+    print("\nSerial Connection OK")
     print("Serial Port: ",ser.name)
     print("Baudrate: ",ser.baudrate)
-    ser.read(9999) # read all data in buffer
-    print("Buffer Clear")
+
+    # Send break code to microcontroller
+    ser.send_break(duration=0.25)  # Send a break signal for 250ms
+    sleep(0.5)  # Wait for the microcontroller to reset or respond
+    
+    # ブレークコード送信時(mbedのリセット時)に受信したデータを読み取る
+    data = ser.read(ser.in_waiting)  # read all data currently in the input buffer
+    
+    # ブレークコード送信時に返信があれば表示させる。センサーの接続確認のためには必要
+    if data:
+        print("Received data on connection:")
+        print(data.decode('ascii', errors='replace'))  # display received bytes as ASCII
+    else:
+        print("No data received on connection.")
+
+    # バッファをクリアする
+    ser.flushInput()  # clear input buffer
+    ser.flushOutput()  # clear output buffer
+    print("\nBuffer Clear")
+
 else:
     print("PORT ERROR") 
     ser.close() 
@@ -90,7 +126,8 @@ def writeCSV():
     day = dt_now.day 
     hour = dt_now.hour 
     minute = dt_now.minute 
-    t = str(year) + f"{month:02}" + f"{day:02}" + "_" + f"{hour:02}" + f"{minute:02}"
+    second = dt_now.second 
+    t = str(year) + f"{month:02}" + f"{day:02}" + "_" + f"{hour:02}" + f"{minute:02}" + f"{second:02}"
     title_int = "acc_data"+str(t)+"_int"+".csv"
     title_float="acc_data"+str(t)+"_float"+".csv" 
     FILE_int = open(title_int,"w",newline="") 
@@ -135,6 +172,7 @@ def readByte():
                 break
 
         res = ser.read()
+        # 受信したバイトを表示
         # print(f"{res.hex()} ", end="")
 
         if res == b'':  # タイムアウト時
@@ -156,37 +194,55 @@ def readByte():
 
             else:
                 state = 2
-                # print("found header")
+                # print("found header") 
                 # 直後の行を実行するので continue しない！
 
         if state == 2:
             store = ser.read(27) # ← ヘッダを除いて残り27バイト受信でOK
-            print(" ".join(f"{byte:02x}" for byte in store))
+
+            # 受信した全てのバイトを表示
+            # print(" ".join(f"{byte:02x}" for byte in store))
+            
+            # 受信したバイト数を表示
             # print(f"Received {len(store)} bytes")
+
             try:
                 # タイムスタンプ（末尾3バイト）
                 timestamp_bytes = b''.join(bytes([b]) for b in store[-3:])
-                print("TIMESTAMP " + " ".join(f"{byte:02x}" for byte in timestamp_bytes))
+
+                # タイムスタンプのバイト列を表示
+                # print("TIMESTAMP " + " ".join(f"{byte:02x}" for byte in timestamp_bytes))
+            
                 # タイムスタンプを整数に変換
                 timestamp = int.from_bytes(timestamp_bytes, byteorder='big')
                 print(f"Timestamp: {timestamp}")
 
                 if smpl_cnt < len(buf):
+
+                    # サンプル数を格納
                     buf[smpl_cnt][0] = smpl_cnt
-                    buf[smpl_cnt][1] = timestamp
                     buf_f[smpl_cnt][0] = smpl_cnt
+
+                    # タイムスタンプを格納
+                    buf[smpl_cnt][1] = timestamp
                     buf_f[smpl_cnt][1] = timestamp
 
                     for i in range(0, 24, 2):
+                        # 2バイトずつ読み取る(16bit分解能、ビッグエンディアン)
                         val = struct.unpack('>h', bytes(store[i:i+2]))[0]
+
                         idx = i // 2
                         buf[smpl_cnt][idx + 2] = val
+                        
+                        # 実数値保持用
                         if idx % 6 >= 3:
                             buf_f[smpl_cnt][idx + 2] = val * MPU9250G_2000dps
                         else:
                             buf_f[smpl_cnt][idx + 2] = val * MPU9250A_16g
 
+                    # 取得データ数をインクリメント
                     smpl_cnt += 1
+
                     # print("Data parsed successfully")
                 else:
                     print("Buffer full. Skipping.")
@@ -199,7 +255,7 @@ def readByte():
                 state = 0
                 
 
-            if smpl_cnt >= 1000:
+            if smpl_cnt >= maxSmpl:
                 break
 
 
@@ -230,7 +286,7 @@ readByte()
 e_time = time.time() 
 
 # The time it took 
-print("time: ",e_time - p_time) 
+print(f"\ntime: {e_time - p_time:.2f} [s]\n") 
 
 # Function to create csv file 
 writeCSV() 
